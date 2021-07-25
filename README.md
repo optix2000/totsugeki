@@ -4,10 +4,12 @@ Guilty Gear Strive Proxy for faster loading
 Totsugeki "fixes" the "Communicating with Server" issues and lets you totsugeki past the connection screen.
 
 ## Running
-Running Totsugeki without Strive open will launch Strive, or you can run this any time before the main menu. This _may_ trigger antivirus software as it patches GGST live.
+[Download](https://github.com/optix2000/totsugeki/releases)
+
+Running Totsugeki without Strive open will launch Strive. You can run this any time before the main menu.
+This _may_ trigger antivirus software as it patches GGST live.
 
 Removing Totsugeki is as simple as deleting the executable and restarting the game.
-
 
 ## The technical nitty gritty:
 Strive makes a new TCP connection and a new TLS connection _every_ API call it makes. [And it makes hundreds of them in the title screen](https://www.reddit.com/r/Guiltygear/comments/oaqwo5/analysis_of_network_traffic_at_game_startup/).
@@ -28,7 +30,7 @@ Thanks to u/TarballX for doing the initial research on why Strive takes so long 
 I plan on adding some caching and pre-sending requests to further speed up loading.
 
 ## Building
-Tested with Golang 1.16, but probably can compile with Golang 1.13.
+Tested with Golang 1.16, but probably will compile with Golang 1.13+.
 
 ### Installing from source
 `go install github.com/optix2000/totsugeki`
