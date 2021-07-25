@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -125,7 +126,7 @@ func patchGGST(pid uint32) error {
 			fmt.Println(err)
 			return err
 		}
-		if filepath.Base(string(moduleName[:])) == GGStriveExe {
+		if strings.EqualFold(filepath.Base(strings.TrimRight(string(moduleName[:]), "\000")), GGStriveExe) {
 			module = modules[i]
 			break
 		}
