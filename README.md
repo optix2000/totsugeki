@@ -4,7 +4,7 @@ Guilty Gear Strive Proxy for faster loading
 Totsugeki "fixes" the "Communicating with Server" issues and lets you totsugeki past the connection screen.
 
 ## Running
-Running Totsugeki without Strive open will launch Strive, or you can run this any time before the main menu. This _may_ trigger antivirus software as any program that patches another tends to look malicious.
+Running Totsugeki without Strive open will launch Strive, or you can run this any time before the main menu. This _may_ trigger antivirus software as it patches GGST live.
 
 Removing Totsugeki is as simple as deleting the executable and restarting the game.
 
