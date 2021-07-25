@@ -14,7 +14,7 @@ Removing Totsugeki is as simple as deleting the executable and restarting the ga
 ## The technical nitty gritty:
 Strive makes a new TCP connection and a new TLS connection _every_ API call it makes. [And it makes hundreds of them in the title screen](https://www.reddit.com/r/Guiltygear/comments/oaqwo5/analysis_of_network_traffic_at_game_startup/).
 
-Totsugeki runs a local Strive API server and patches the Strive to use the local API server. Despite the fact that Strive makes a new connection for every API call, it's moot as it takes ~0ms to hit the local API server. The local API server forwards all the API calls over a proper keepalive connection to the actual Strive servers.
+Totsugeki runs a local Strive API server and patches the Strive to use the local API server. Despite the fact that Strive makes a new connection for every API call, it now only takes 0 ms to make new connections over the local API server. The local API server forwards all the API calls over a proper keepalive connection to the actual Strive servers.
 
 What this means is instead of doing 4 round trips (TCP + TLS + HTTP) for each API call, it only needs to do 1 (HTTP only). This shortens the loading time by a factor of FOUR!
 For example, if you live in the EU and have ~300ms ping to the Strive servers, you usually see something like 300ms * (1 TCP round trip * 2 TLS round trips + 1 HTTP Request round trip) = 1.2 seconds per API call.
