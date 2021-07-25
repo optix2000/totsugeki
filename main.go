@@ -24,7 +24,7 @@ const GGStriveExe = "GGST-Win64-Shipping.exe"
 const APIOffsetAddr uintptr = 0x3429EB0
 
 const GGStriveAPIURL = "https://ggst-game.guiltygear.com/api/"
-const PatchedAPIURL = "http://localhost:21611/api/"
+const PatchedAPIURL = "http://127.0.0.1:21611/api/"
 
 // Other necessary Windows API's
 var modKernel32 *windows.LazyDLL
@@ -132,8 +132,8 @@ func patchGGST(pid uint32) error {
 		}
 	}
 	if module == 0 {
-		// TODO: Handle errors better
-		panic("Couldn't find base module for GGST")
+		// TODO: Better error handling
+		panic("Couldn't find base module for GGST.")
 	}
 
 	// Get Entrypoint so we have an idea where GGST's memory starts
@@ -355,7 +355,7 @@ func main() {
 	})
 
 	fmt.Println("Started Proxy Server on port 21611.")
-	http.ListenAndServe(":21611", r)
+	http.ListenAndServe("127.0.0.1:21611", r)
 }
 
 // TODO: Configurable options for everything
