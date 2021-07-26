@@ -3,6 +3,10 @@ Guilty Gear Strive Proxy for faster loading
 
 Totsugeki "fixes" the "Communicating with Server" issues and lets you totsugeki past the connection screen.
 
+https://user-images.githubusercontent.com/1121068/126918454-f2b2366f-2c82-4f97-acea-a36aa92485e5.mp4
+
+Totsugeki is completely transparent and makes no modifications to any game files (ie. is not a mod).
+
 ## Running
 [Download](https://github.com/optix2000/totsugeki/releases)
 
