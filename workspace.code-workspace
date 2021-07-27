@@ -3,5 +3,12 @@
 		{
 			"path": "."
 		}
-	]
+	],
+	"settings": {
+		"cSpell.words": [
+			"GGST",
+			"proxying",
+			"totsugeki"
+		]
+	}
 }
