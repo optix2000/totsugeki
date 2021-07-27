@@ -207,6 +207,13 @@ func patchGGST(pid uint32) error {
 		return err
 	}
 
+	// re-protect memory after patching
+	ret, _, err = procVirtualProtectEx.Call(uintptr(proc), offset, uintptr(len(GGStriveAPIURL)), uintptr(oldProtect), uintptr(unsafe.Pointer(&oldProtect)))
+	if ret == 0 { // err is always set, even on success. Need to look at return value
+		fmt.Println(err)
+		return err
+	}
+
 	return nil
 }
 
