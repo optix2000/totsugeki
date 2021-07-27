@@ -326,8 +326,7 @@ func main() {
 	if err != nil {
 		if errors.Is(err, ErrProcessNotFound) {
 			fmt.Println("Starting GGST...")
-			cmd := exec.Cmd{Path: "C:\\Program Files (x86)\\Steam\\Steam.exe", Args: []string{"steam://rungameid/1384160"}}
-			err = cmd.Start()
+			err = exec.Command("rundll32", "url.dll,FileProtocolHandler", "steam://rungameid/1384160").Start()
 			if err != nil {
 				fmt.Println(err)
 			}
