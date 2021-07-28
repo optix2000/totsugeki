@@ -4,7 +4,7 @@ Guilty Gear Strive Proxy for faster loading screens.
 
 Totsugeki lets you totsugeki past the Strive connection screen.
 
-https://user-images.githubusercontent.com/1121068/126918454-f2b2366f-2c82-4f97-acea-a36aa92485e5.mp4
+![https://user-images.githubusercontent.com/1121068/126918454-f2b2366f-2c82-4f97-acea-a36aa92485e5.mp4](https://user-images.githubusercontent.com/1121068/126918454-f2b2366f-2c82-4f97-acea-a36aa92485e5.mp4)
 
 ## Quickstart
 
@@ -20,6 +20,29 @@ Removing Totsugeki is as simple as deleting the executable and launching the gam
 - No installation or messing with system files. Just download and run.
 - No administrator permissions needed.
 - 100% transparent: Sends data bit-for-bit the same as vanilla Strive. No stat or lobby inconsistencies.
+
+## Advanced Usage
+
+You can disable any functionality of Totsugeki by adding `-no-<feature>` as an argument to `totsugeki.exe`. For example `C:\Users\user\Downloads\totsugeki.exe -no-launch` will no longer launch GGST.
+
+Valid options:
+
+```none
+  -help
+        This help text.
+  -no-launch
+        Don't launch GGST. Useful if you want to launch GGST through other means.
+  -no-patch
+        Don't patch GGST with proxy address.
+  -no-proxy
+        Don't start local proxy. Useful if you want to run your own proxy.
+  -version
+        Print the version number and exit.
+```
+
+The easiest way to do this would be to create a shortcut to totsugeki.exe and add the argument on the shortcut.
+
+![https://user-images.githubusercontent.com/1121068/127271607-8866b52b-ce69-4661-9fa2-50f00833a1aa.png](https://user-images.githubusercontent.com/1121068/127271607-8866b52b-ce69-4661-9fa2-50f00833a1aa.png)
 
 ## Building
 
