@@ -1,4 +1,4 @@
-# totsugeki 🐬
+# totsugeki 🐬 ![Build](https://github.com/optix2000/totsugeki/actions/workflows/build.yml/badge.svg)
 
 Guilty Gear Strive Proxy for faster loading screens.
 
@@ -18,7 +18,7 @@ Removing Totsugeki is as simple as deleting the executable and launching the gam
 
 - 3-4x Speedup compared to vanilla Strive.
 - No installation or messing with system files. Just download and run.
-- No admin permissions needed.
+- No administrator permissions needed.
 - 100% transparent: Sends data bit-for-bit the same as vanilla Strive. No stat or lobby inconsistencies.
 
 ## Building
