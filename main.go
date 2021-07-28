@@ -22,7 +22,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var Version string
+var Version string = "(unknown version)"
 
 const GGStriveExe = "GGST-Win64-Shipping.exe"
 
