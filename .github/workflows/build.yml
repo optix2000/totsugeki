@@ -2,9 +2,8 @@ name: Builds
 on:
   push:
   pull_request:
-    branches: [master]
   release:
-    types: [created,published]
+    types: [created]
 jobs:
   build:
     runs-on: windows-latest
@@ -36,15 +35,14 @@ jobs:
         retention-days: 1
   release:
     needs: build
-    runs-on: linux-latest
+    runs-on: ubuntu-latest
     if: ${{ github.event_name == 'release'}}
+    permissions:
+      contents: write
     steps:
-    - uses: heinrichreimer/github-changelog-generator-action@v2
-      id: changelog
     - uses: actions/download-artifact@v2
       with:
         name: totsugeki
     - uses: softprops/action-gh-release@v1
       with:
-        body: ${{ steps.changelog.outputs.changelog }}
         files: totsugeki.exe
