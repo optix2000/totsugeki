@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -64,6 +65,30 @@ const totsugeki = " _____       _                             _     _ \n" +
 	"  | || (_) || |_ \\__ \\| |_| || (_| ||  __/|   < | |\n" +
 	"  |_| \\___/  \\__||___/ \\__,_| \\__, | \\___||_|\\_\\|_|\n" +
 	"                              |___/                "
+
+func panicBox(v interface{}) {
+	const header = `Totsugeki has encountered a fatal error.
+
+Please report this to https://github.com/optix2000/totsugeki/issues
+
+===================
+
+Error: %v
+
+%v`
+	msg, e := windows.UTF16PtrFromString(fmt.Sprintf(header, v, string(debug.Stack())))
+	if e != nil {
+		fmt.Println(e)
+		panic(e)
+	}
+	_, e = windows.MessageBox(0, msg, nil, windows.MB_OK|windows.MB_ICONWARNING|windows.MB_SETFOREGROUND)
+	if e != nil {
+		fmt.Println(e)
+		panic(e)
+	}
+
+	panic(v)
+}
 
 func getGGST() (uint32, error) {
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
@@ -317,6 +342,14 @@ func main() {
 
 	fmt.Println(totsugeki)
 	fmt.Printf("                                         %s\n", "Beta")
+
+	// Raise an alert box on panic so non-technical users don't lose the output.
+	defer func() {
+		r := recover()
+		if r != nil {
+			panicBox(r)
+		}
+	}()
 
 	if !*noLaunch {
 		_, err := getGGST()
