@@ -22,6 +22,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+//go:generate go-winres make --product-version=git-tag --file-version=git-tag
+
 var Version string = "(unknown version)"
 
 const GGStriveExe = "GGST-Win64-Shipping.exe"
