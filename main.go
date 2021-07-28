@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -308,22 +309,33 @@ func main() {
 	procGetModuleInformation = modPSAPI.NewProc("GetModuleInformation")
 	procGetModuleFileNameExA = modPSAPI.NewProc("GetModuleFileNameExA")
 
+	var noProxy = flag.Bool("no-proxy", false, "Don't start local proxy. Useful if you want to run your own proxy.")
+	var noLaunch = flag.Bool("no-launch", false, "Don't launch GGST. Useful if you want to launch GGST through other means.")
+	var noPatch = flag.Bool("no-patch", false, "Don't patch GGST with proxy address.")
+
+	flag.Parse()
+
 	fmt.Println(totsugeki)
 	fmt.Printf("                                         %s\n", "Beta")
 
-	_, err := getGGST()
-	if err != nil {
-		if errors.Is(err, ErrProcessNotFound) {
-			fmt.Println("Starting GGST...")
-			err = exec.Command("rundll32", "url.dll,FileProtocolHandler", "steam://rungameid/1384160").Start()
-			if err != nil {
-				fmt.Println(err)
+	if !*noLaunch {
+		_, err := getGGST()
+		if err != nil {
+			if errors.Is(err, ErrProcessNotFound) {
+				fmt.Println("Starting GGST...")
+				err = exec.Command("rundll32", "url.dll,FileProtocolHandler", "steam://rungameid/1384160").Start()
+				if err != nil {
+					fmt.Println(err)
+				}
+			} else {
+				panic(err)
 			}
-		} else {
-			panic(err)
 		}
 	}
-	go watchGGST()
+
+	if !*noPatch {
+		go watchGGST()
+	}
 
 	// Proxy side
 
@@ -342,9 +354,10 @@ func main() {
 
 	})
 
-	fmt.Println("Started Proxy Server on port 21611.")
-	http.ListenAndServe("127.0.0.1:21611", r)
+	if !*noProxy {
+		fmt.Println("Started Proxy Server on port 21611.")
+		http.ListenAndServe("127.0.0.1:21611", r)
+	}
 }
 
-// TODO: Configurable options for everything
 // TODO: Caching for most APIs (may need API caching/parsing/reversing)
