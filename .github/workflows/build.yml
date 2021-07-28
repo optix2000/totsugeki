@@ -28,7 +28,7 @@ jobs:
         key: ${{ runner.os }}-go-cache-${{ hashFiles('go.sum') }}
         restore-keys: |
            ${{ runner.os }}-go-cache-
-    - run: go build -v -trimpath
+    - run: go build -v -trimpath -ldflags="-X main.Version=$(git describe --tags)"
     - uses: actions/upload-artifact@v2
       with:
         name: totsugeki

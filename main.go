@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
@@ -20,6 +21,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"golang.org/x/sys/windows"
 )
+
+var Version string
 
 const GGStriveExe = "GGST-Win64-Shipping.exe"
 
@@ -337,11 +340,17 @@ func main() {
 	var noProxy = flag.Bool("no-proxy", false, "Don't start local proxy. Useful if you want to run your own proxy.")
 	var noLaunch = flag.Bool("no-launch", false, "Don't launch GGST. Useful if you want to launch GGST through other means.")
 	var noPatch = flag.Bool("no-patch", false, "Don't patch GGST with proxy address.")
+	var ver = flag.Bool("version", false, "Print the version number and exit.")
 
 	flag.Parse()
 
+	if *ver {
+		fmt.Printf("totsugeki %v", Version)
+		os.Exit(0)
+	}
+
 	fmt.Println(totsugeki)
-	fmt.Printf("                                         %s\n", "Beta")
+	fmt.Printf("                                         %s\n", Version)
 
 	// Raise an alert box on panic so non-technical users don't lose the output.
 	defer func() {
