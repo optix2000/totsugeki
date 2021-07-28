@@ -21,7 +21,7 @@ import (
 
 const GGStriveExe = "GGST-Win64-Shipping.exe"
 
-const APIOffsetAddr uintptr = 0x3429D10 + 0x1000 // exe offset + 0x1000
+const APIOffsetAddr uintptr = 0x342AD10 // 1.07
 
 const GGStriveAPIURL = "https://ggst-game.guiltygear.com/api/"
 const PatchedAPIURL = "http://127.0.0.1:21611/api/"
@@ -151,25 +151,7 @@ func patchGGST(pid uint32) error {
 		return err
 	}
 
-	// Get base address so we can add our offset
-	var memoryInfo struct {
-		BaseAddress       uintptr
-		AllocationBase    uintptr
-		AllocationProtect uint32
-		PartitionID       uint16
-		RegionSize        uintptr
-		State             uint32
-		Protect           uint32
-		Type              uint32
-	}
-	cb = uint32(unsafe.Sizeof(memoryInfo))
-
-	ret, _, err = procVirtualQueryEx.Call(uintptr(proc), moduleInfo.EntryPoint, uintptr(unsafe.Pointer(&memoryInfo)), uintptr(cb))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
-		fmt.Println(err)
-		return err
-	}
-	var offset = memoryInfo.AllocationBase + APIOffsetAddr
+	var offset = moduleInfo.LPBaseOfDll + APIOffsetAddr
 
 	fmt.Printf("Patching GGST with PID %d at offset 0x%x.\n", pid, offset)
 
