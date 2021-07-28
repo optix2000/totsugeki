@@ -1,0 +1,50 @@
+name: Builds
+on:
+  push:
+  pull_request:
+    branches: [master]
+  release:
+    types: [created,published]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+    # Silly hack to pass GOCACHE between steps
+    - name: go env
+      env:
+        ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+      run: |
+        echo "::set-env name=GOCACHE::$(go env GOCACHE)"
+        echo "::set-env name=GOMODCACHE::$(go env GOMODCACHE)"
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ${{ env.GOCACHE }}
+          ${{ env.GOMODCACHE }}
+        key: ${{ runner.os }}-go-cache-${{ hashFiles('go.sum') }}
+        restore-keys: |
+           ${{ runner.os }}-go-cache-
+    - run: go build -v -trimpath
+    - uses: actions/upload-artifact@v2
+      with:
+        name: totsugeki
+        path: totsugeki.exe
+        retention-days: 1
+  release:
+    needs: build
+    runs-on: linux-latest
+    if: ${{ github.event_name == 'release'}}
+    steps:
+    - uses: heinrichreimer/github-changelog-generator-action@v2
+      id: changelog
+    - uses: actions/download-artifact@v2
+      with:
+        name: totsugeki
+    - uses: softprops/action-gh-release@v1
+      with:
+        body: ${{ steps.changelog.outputs.changelog }}
+        files: totsugeki.exe
