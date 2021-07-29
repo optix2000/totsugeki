@@ -21,7 +21,9 @@ Removing Totsugeki is as simple as deleting the executable and launching the gam
 - No administrator permissions needed.
 - 100% transparent: Sends data bit-for-bit the same as vanilla Strive. No stat or lobby inconsistencies.
 
-## Advanced Usage (v0.1.0+)
+## Advanced Usage
+
+(Supported in v0.1.0+)
 
 You can disable any functionality of Totsugeki by adding `-no-<feature>` as an argument to `totsugeki.exe`. For example `C:\Users\user\Downloads\totsugeki.exe -no-launch` will no longer launch GGST.
 
