@@ -292,12 +292,13 @@ func (s *StriveAPIProxy) handleGetEnv(w http.ResponseWriter, r *http.Request) {
 }
 
 // Patch GGST as it starts
-func watchGGST() {
+func watchGGST(noClose bool) {
 	var patchedPid uint32 = 1
+	var close bool = false
 	for {
 		pid, err := getGGST()
 		if err != nil {
-			if errors.Is(err, ErrProcessNotFound) {
+			if errors.Is(err, ErrProcessNotFound) && !close {
 				if patchedPid != 0 {
 					fmt.Println("Waiting for GGST process...")
 					patchedPid = 0
@@ -305,6 +306,8 @@ func watchGGST() {
 
 				time.Sleep(2 * time.Second)
 				continue
+			} else if close {
+				os.Exit(0)
 			} else {
 				panic(err)
 			}
@@ -322,6 +325,9 @@ func watchGGST() {
 			}
 		} else {
 			fmt.Printf("Patched GGST with PID %d.\n", pid)
+			if !noClose {
+				close = true
+			}
 		}
 		patchedPid = pid
 	}
@@ -342,6 +348,7 @@ func main() {
 	var noProxy = flag.Bool("no-proxy", false, "Don't start local proxy. Useful if you want to run your own proxy.")
 	var noLaunch = flag.Bool("no-launch", false, "Don't launch GGST. Useful if you want to launch GGST through other means.")
 	var noPatch = flag.Bool("no-patch", false, "Don't patch GGST with proxy address.")
+	var noClose = flag.Bool("no-close", false, "Don't automatically close totsugeki alongside GGST.")
 	var ver = flag.Bool("version", false, "Print the version number and exit.")
 
 	flag.Parse()
@@ -378,7 +385,7 @@ func main() {
 	}
 
 	if !*noPatch {
-		go watchGGST()
+		go watchGGST(*noClose)
 	}
 
 	// Proxy side
