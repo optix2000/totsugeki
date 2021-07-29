@@ -36,6 +36,8 @@ Valid options:
         Don't patch GGST with proxy address.
   -no-proxy
         Don't start local proxy. Useful if you want to run your own proxy.
+  -no-close
+        Don't automatically close totsugeki alongside GGST.
   -version
         Print the version number and exit.
 ```
