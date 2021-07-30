@@ -44,7 +44,7 @@ Valid options:
         Print the version number and exit.
 ```
 
-The easiest way to do this would be to create a shortcut to totsugeki.exe and add the argument on the shortcut.
+The easiest way to do this would be to create a shortcut to `totsugeki.exe` and add the argument on the shortcut.
 
 ![https://user-images.githubusercontent.com/1121068/127271607-8866b52b-ce69-4661-9fa2-50f00833a1aa.png](https://user-images.githubusercontent.com/1121068/127271607-8866b52b-ce69-4661-9fa2-50f00833a1aa.png)
 
@@ -67,7 +67,7 @@ GGST makes a new TCP connection and a new TLS connection _every_ API call it mak
 Totsugeki solves this by proxying all API requests through a keepalive connection.
 
 What this means is instead of doing 4 round trips (TCP + TLS + HTTP) for each API call, it only needs to do 1 (HTTP only). This shortens the loading time by a factor of FOUR!
-For example, if you live in the EU and have ~300ms ping to the GGST servers, you usually see something like `300ms * (1 TCP round trip * 2 TLS round trips + 1 HTTP Request round trip) = 1.2 seconds` per API call.
+For example, if you live in the EU and have ~300ms ping to the GGST servers, you usually see something like `300ms * (1 TCP round trip + 2 TLS round trips + 1 HTTP Request round trip) = 1.2 seconds` per API call.
 
 This multiplied across all 127 API calls needed to get to the main menu means it takes a whopping 152 seconds (2.5 minutes) to load into GGST.
 
