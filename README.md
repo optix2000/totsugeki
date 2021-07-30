@@ -1,4 +1,4 @@
-# totsugeki 🐬 ![Build](https://github.com/optix2000/totsugeki/actions/workflows/build.yml/badge.svg)
+# totsugeki 🐬 <a href="https://github.com/optix2000/totsugeki/actions"><img src="https://github.com/optix2000/totsugeki/actions/workflows/build.yml/badge.svg" alt="Builds"></a> <a href="https://github.com/optix2000/totsugeki/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/optix2000/totsugeki"></a> <a href="https://github.com/optix2000/totsugeki/releases/latest"><img src="https://img.shields.io/github/downloads/optix2000/totsugeki/total"></a> <a href="https://twitter.com/ggst_totsugeki"><img alt="Twitter Follow" src="https://img.shields.io/twitter/follow/ggst_totsugeki?style=social"></a>
 
 Guilty Gear Strive Proxy for faster loading screens.
 
@@ -46,7 +46,7 @@ Valid options:
 
 The easiest way to do this would be to create a shortcut to `totsugeki.exe` and add the argument on the shortcut.
 
-![https://user-images.githubusercontent.com/1121068/127271607-8866b52b-ce69-4661-9fa2-50f00833a1aa.png](https://user-images.githubusercontent.com/1121068/127271607-8866b52b-ce69-4661-9fa2-50f00833a1aa.png)
+<img src="https://user-images.githubusercontent.com/1121068/127271607-8866b52b-ce69-4661-9fa2-50f00833a1aa.png" alt="Shortcut Properties" width="300">
 
 ## Building
 
