@@ -44,6 +44,11 @@ jobs:
         name: totsugeki
         path: totsugeki.exe
         retention-days: 1
+    - uses: optix2000/ghaction-virustotal@v2
+      with:
+        vt_api_key: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        files: totsugeki.exe
+        update_release_body: true
   release:
     needs: build
     runs-on: ubuntu-latest
