@@ -39,7 +39,7 @@ Valid options:
   -no-proxy
         Don't start local proxy. Useful if you want to run your own proxy.
   -no-close
-        Don't automatically close totsugeki alongside GGST. (v0.3.0+)
+        Don't automatically close totsugeki alongside GGST. (v1.0.0+)
   -version
         Print the version number and exit.
 ```
