@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -384,31 +385,42 @@ func main() {
 		}
 	}
 
+	var wg sync.WaitGroup
+
 	if !*noPatch {
-		go watchGGST(*noClose)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			watchGGST(*noClose)
+		}()
 	}
 
 	// Proxy side
-
-	proxy := &StriveAPIProxy{client: &http.Client{
-		Transport: &http.Transport{
-			MaxIdleConnsPerHost: 1,
-			MaxConnsPerHost:     2, // Don't try to flood the server with too many connections
-		},
-	}}
-
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Route("/api", func(r chi.Router) {
-		r.HandleFunc("/sys/get_env", proxy.handleGetEnv)
-		r.HandleFunc("/*", proxy.handleCatchall)
-
-	})
-
 	if !*noProxy {
-		fmt.Println("Started Proxy Server on port 21611.")
-		http.ListenAndServe("127.0.0.1:21611", r)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			proxy := &StriveAPIProxy{client: &http.Client{
+				Transport: &http.Transport{
+					MaxIdleConnsPerHost: 1,
+					MaxConnsPerHost:     2, // Don't try to flood the server with too many connections
+				},
+			}}
+
+			r := chi.NewRouter()
+			r.Use(middleware.Logger)
+			r.Route("/api", func(r chi.Router) {
+				r.HandleFunc("/sys/get_env", proxy.handleGetEnv)
+				r.HandleFunc("/*", proxy.handleCatchall)
+
+			})
+
+			fmt.Println("Started Proxy Server on port 21611.")
+			http.ListenAndServe("127.0.0.1:21611", r)
+		}()
 	}
+
+	wg.Wait()
 }
 
 // TODO: Caching for most APIs (may need API caching/parsing/reversing)
