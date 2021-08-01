@@ -1,4 +1,4 @@
-# totsugeki 🐬 <a href="https://github.com/optix2000/totsugeki/actions"><img src="https://github.com/optix2000/totsugeki/actions/workflows/build.yml/badge.svg" alt="Builds"></a> <a href="https://github.com/optix2000/totsugeki/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/optix2000/totsugeki"></a> <a href="https://github.com/optix2000/totsugeki/releases/latest"><img src="https://img.shields.io/github/downloads/optix2000/totsugeki/total"></a> <a href="https://twitter.com/ggst_totsugeki"><img alt="Twitter Follow" src="https://img.shields.io/twitter/follow/ggst_totsugeki?style=social"></a>
+# totsugeki 🐬 <a href="https://github.com/optix2000/totsugeki/actions"><img src="https://img.shields.io/github/workflow/status/optix2000/totsugeki/Builds/master" alt="Builds"></a> <a href="https://github.com/optix2000/totsugeki/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/optix2000/totsugeki"></a> <a href="https://github.com/optix2000/totsugeki/releases"><img src="https://img.shields.io/github/downloads/optix2000/totsugeki/total"></a> <a href="https://twitter.com/ggst_totsugeki"><img alt="Twitter Follow" src="https://img.shields.io/twitter/follow/ggst_totsugeki?style=social"></a>
 
 Guilty Gear Strive Proxy for faster loading screens.
 
@@ -8,7 +8,7 @@ https://user-images.githubusercontent.com/1121068/126918454-f2b2366f-2c82-4f97-a
 
 ## Quickstart
 
-1. [Download](https://github.com/optix2000/totsugeki/releases)
+1. [Download](https://github.com/optix2000/totsugeki/releases/latest/download/totsugeki.exe)
 2. Run `totsugeki.exe`
 3. 🐬
 
