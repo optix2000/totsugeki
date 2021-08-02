@@ -1,13 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"runtime/debug"
@@ -15,6 +12,7 @@ import (
 	"time"
 
 	"github.com/optix2000/totsugeki/patcher"
+	"github.com/optix2000/totsugeki/proxy"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -61,67 +59,6 @@ Error: %v
 	}
 
 	panic(v)
-}
-
-type StriveAPIProxy struct {
-	client *http.Client
-}
-
-func (s *StriveAPIProxy) proxyRequest(r *http.Request) (*http.Response, error) {
-	apiURL, err := url.Parse(GGStriveAPIURL) // TODO: Const this
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	apiURL.Path = r.URL.Path
-
-	r.URL = apiURL
-	r.Host = ""
-	r.RequestURI = ""
-	return s.client.Do(r)
-}
-
-// Proxy everything else
-func (s *StriveAPIProxy) handleCatchall(w http.ResponseWriter, r *http.Request) {
-	resp, err := s.proxyRequest(r)
-	if err != nil {
-		fmt.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-	// Copy headers
-	for name, values := range resp.Header {
-		w.Header()[name] = values
-	}
-	w.WriteHeader(resp.StatusCode)
-	reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-	_, err = io.ReadAll(reader)
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
-// GGST uses the URL from this API after initial launch so we need to intercept this.
-func (s *StriveAPIProxy) handleGetEnv(w http.ResponseWriter, r *http.Request) {
-	resp, err := s.proxyRequest(r)
-	if err != nil {
-		fmt.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-	// Copy headers
-	for name, values := range resp.Header {
-		w.Header()[name] = values
-	}
-	w.WriteHeader(resp.StatusCode)
-	buf, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println(err)
-	}
-	buf = bytes.Replace(buf, []byte(GGStriveAPIURL), []byte(PatchedAPIURL), -1)
-	w.Write(buf)
 }
 
 // Patch GGST as it starts
@@ -222,18 +159,17 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			proxy := &StriveAPIProxy{client: &http.Client{
-				Transport: &http.Transport{
-					MaxIdleConnsPerHost: 1,
-					MaxConnsPerHost:     2, // Don't try to flood the server with too many connections
-				},
-			}}
+			proxy := &proxy.StriveAPIProxy{
+				Client:         &http.Client{Transport: &http.Transport{MaxIdleConnsPerHost: 1, MaxConnsPerHost: 2}},
+				GGStriveAPIURL: GGStriveAPIURL,
+				PatchedAPIURL:  PatchedAPIURL,
+			}
 
 			r := chi.NewRouter()
 			r.Use(middleware.Logger)
 			r.Route("/api", func(r chi.Router) {
-				r.HandleFunc("/sys/get_env", proxy.handleGetEnv)
-				r.HandleFunc("/*", proxy.handleCatchall)
+				r.HandleFunc("/sys/get_env", proxy.HandleGetEnv)
+				r.HandleFunc("/*", proxy.HandleCatchall)
 
 			})
 
