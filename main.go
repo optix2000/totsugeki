@@ -10,13 +10,11 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime/debug"
-	"strings"
 	"sync"
-	"syscall"
 	"time"
-	"unsafe"
+
+	"github.com/optix2000/totsugeki/patcher"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -33,37 +31,6 @@ const APIOffsetAddr uintptr = 0x342AD10 // 1.07
 
 const GGStriveAPIURL = "https://ggst-game.guiltygear.com/api/"
 const PatchedAPIURL = "http://127.0.0.1:21611/api/"
-
-// Other necessary Windows API's
-var modKernel32 *windows.LazyDLL
-var modPSAPI *windows.LazyDLL
-var procReadProcessMemory *windows.LazyProc
-var procWriteProcessMemory *windows.LazyProc
-var procVirtualProtectEx *windows.LazyProc
-var procVirtualQueryEx *windows.LazyProc
-var procGetModuleInformation *windows.LazyProc
-var procEnumProcessModules *windows.LazyProc
-var procGetModuleFileNameExA *windows.LazyProc
-
-// TODO: use this to dump debugging info
-type WinAPIError struct {
-	Err error
-}
-
-func (e *WinAPIError) Error() string {
-	return e.Err.Error()
-}
-
-var ErrProcessAlreadyPatched = errors.New("process already patched")
-
-var ErrProcessNotFound = errors.New("couldn't find GGST process")
-
-func min(a uint32, b uint32) uint32 {
-	if a > b {
-		return b
-	}
-	return a
-}
 
 const totsugeki = " _____       _                             _     _ \n" +
 	"|_   _|___  | |_  ___  _   _   __ _   ___ | | __(_)\n" +
@@ -94,141 +61,6 @@ Error: %v
 	}
 
 	panic(v)
-}
-
-func getGGST() (uint32, error) {
-	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
-	if err != nil {
-		fmt.Println(err)
-		return 0, err
-	}
-	defer windows.CloseHandle(snapshot)
-	var pe32 windows.ProcessEntry32
-
-	pe32.Size = uint32(unsafe.Sizeof(pe32)) // NB: https://docs.microsoft.com/en-us/windows/win32/api/tlhelp32/ns-tlhelp32-processentry32
-
-	if err = windows.Process32First(snapshot, &pe32); err != nil {
-		fmt.Println(err)
-		return 0, err
-	}
-
-	for {
-		procName := windows.UTF16ToString(pe32.ExeFile[:]) // Windows strings are UTF-16
-		if procName == GGStriveExe {
-			return pe32.ProcessID, nil
-		}
-		err = windows.Process32Next(snapshot, &pe32)
-		if err != nil {
-			if winErr, ok := err.(syscall.Errno); ok {
-				if winErr == windows.ERROR_NO_MORE_FILES {
-					break
-				}
-			}
-			fmt.Println(err)
-			return 0, err
-		}
-	}
-	return 0, ErrProcessNotFound
-}
-
-func patchGGST(pid uint32) error {
-	proc, err := windows.OpenProcess(windows.PROCESS_VM_READ|windows.PROCESS_VM_WRITE|windows.PROCESS_VM_OPERATION|windows.PROCESS_QUERY_INFORMATION, false, pid)
-	if err != nil {
-		panic(err)
-	}
-	defer windows.CloseHandle(proc)
-
-	var modules [512]uintptr // TODO: Don't hardcode
-	var cb = uint32(unsafe.Sizeof(modules))
-	var cbNeeded uint32
-
-	ret, _, err := procEnumProcessModules.Call(uintptr(proc), uintptr(unsafe.Pointer(&modules)), uintptr(cb), uintptr(unsafe.Pointer(&cbNeeded)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
-		fmt.Println(err)
-		return err
-	}
-
-	// Look for base module
-	var i uint32
-	var module uintptr
-	for i = 0; i < cbNeeded/uint32(unsafe.Sizeof(modules[0])); i++ {
-		var moduleName [260]byte // TODO: Don't hardcode
-		ret, _, err = procGetModuleFileNameExA.Call(uintptr(proc), uintptr(modules[i]), uintptr(unsafe.Pointer(&moduleName)), unsafe.Sizeof(moduleName))
-		if ret == 0 { // err is always set, even on success. Need to look at return value
-			fmt.Println(err)
-			return err
-		}
-		if strings.EqualFold(filepath.Base(strings.TrimRight(string(moduleName[:]), "\000")), GGStriveExe) {
-			module = modules[i]
-			break
-		}
-	}
-	if module == 0 {
-		// TODO: Better error handling
-		panic("Couldn't find base module for GGST.")
-	}
-
-	// Get Entrypoint so we have an idea where GGST's memory starts
-	var moduleInfo struct {
-		LPBaseOfDll uintptr
-		SizeOfImage uint32
-		EntryPoint  uintptr
-	}
-
-	cb = uint32(unsafe.Sizeof(moduleInfo))
-
-	ret, _, err = procGetModuleInformation.Call(uintptr(proc), module, uintptr(unsafe.Pointer(&moduleInfo)), uintptr(cb))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
-		fmt.Println(err)
-		return err
-	}
-
-	var offset = moduleInfo.LPBaseOfDll + APIOffsetAddr
-
-	fmt.Printf("Patching GGST with PID %d at offset 0x%x.\n", pid, offset)
-
-	var buf = make([]byte, len(GGStriveAPIURL))
-	var bytesRead uint32
-
-	// Verify we're at the correct offset
-	ret, _, err = procReadProcessMemory.Call(uintptr(proc), offset, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(GGStriveAPIURL)), uintptr(unsafe.Pointer(&bytesRead)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
-		fmt.Println(err)
-		return err
-	}
-
-	if string(buf[:bytesRead]) != GGStriveAPIURL {
-		if string(buf[:min(bytesRead, uint32(len(PatchedAPIURL)))]) == PatchedAPIURL {
-			return ErrProcessAlreadyPatched
-		}
-		return fmt.Errorf("%q does not match signature at offset 0x%x", buf[:bytesRead], offset)
-	}
-
-	// Set memory writable
-	var oldProtect uint32
-	ret, _, err = procVirtualProtectEx.Call(uintptr(proc), offset, uintptr(len(GGStriveAPIURL)), windows.PAGE_READWRITE, uintptr(unsafe.Pointer(&oldProtect)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
-		fmt.Println(err)
-		return err
-	}
-
-	var bytesWritten uint32
-	buf = make([]byte, len(GGStriveAPIURL))
-	copy(buf, PatchedAPIURL)
-	ret, _, err = procWriteProcessMemory.Call(uintptr(proc), offset, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(GGStriveAPIURL)), uintptr(unsafe.Pointer(&bytesWritten)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
-		fmt.Println(err)
-		return err
-	}
-
-	// re-protect memory after patching
-	ret, _, err = procVirtualProtectEx.Call(uintptr(proc), offset, uintptr(len(GGStriveAPIURL)), uintptr(oldProtect), uintptr(unsafe.Pointer(&oldProtect)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
-		fmt.Println(err)
-		return err
-	}
-
-	return nil
 }
 
 type StriveAPIProxy struct {
@@ -297,9 +129,9 @@ func watchGGST(noClose bool) {
 	var patchedPid uint32 = 1
 	var close bool = false
 	for {
-		pid, err := getGGST()
+		pid, err := patcher.GetProc(GGStriveExe)
 		if err != nil {
-			if errors.Is(err, ErrProcessNotFound) && !close {
+			if errors.Is(err, patcher.ErrProcessNotFound) && !close {
 				if patchedPid != 0 {
 					fmt.Println("Waiting for GGST process...")
 					patchedPid = 0
@@ -317,15 +149,16 @@ func watchGGST(noClose bool) {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		err = patchGGST(pid)
+		offset, err := patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, GGStriveAPIURL, PatchedAPIURL)
 		if err != nil {
-			if errors.Is(err, ErrProcessAlreadyPatched) {
-				fmt.Printf("GGST with PID %d is already patched.\n", pid)
+			if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
+				fmt.Printf("GGST with PID %d is already patched at offset 0x%x.\n", pid, offset)
 			} else {
+				fmt.Printf("Error at offset 0x%x: %v", offset, err)
 				panic(err)
 			}
 		} else {
-			fmt.Printf("Patched GGST with PID %d.\n", pid)
+			fmt.Printf("Patched GGST with PID %d at offset 0x%x.\n", pid, offset)
 			if !noClose {
 				close = true
 			}
@@ -335,17 +168,6 @@ func watchGGST(noClose bool) {
 }
 
 func main() {
-	// Following Windows API's are not implemented in Golang stdlib and need to be loaded from DLL manually
-	modKernel32 = windows.NewLazySystemDLL("kernel32.dll")
-	modPSAPI = windows.NewLazySystemDLL("psapi.dll")
-	procReadProcessMemory = modKernel32.NewProc("ReadProcessMemory")
-	procWriteProcessMemory = modKernel32.NewProc("WriteProcessMemory")
-	procVirtualProtectEx = modKernel32.NewProc("VirtualProtectEx")
-	procVirtualQueryEx = modKernel32.NewProc("VirtualQueryEx")
-	procEnumProcessModules = modPSAPI.NewProc("EnumProcessModules")
-	procGetModuleInformation = modPSAPI.NewProc("GetModuleInformation")
-	procGetModuleFileNameExA = modPSAPI.NewProc("GetModuleFileNameExA")
-
 	var noProxy = flag.Bool("no-proxy", false, "Don't start local proxy. Useful if you want to run your own proxy.")
 	var noLaunch = flag.Bool("no-launch", false, "Don't launch GGST. Useful if you want to launch GGST through other means.")
 	var noPatch = flag.Bool("no-patch", false, "Don't patch GGST with proxy address.")
@@ -371,9 +193,9 @@ func main() {
 	}()
 
 	if !*noLaunch {
-		_, err := getGGST()
+		_, err := patcher.GetProc(GGStriveExe)
 		if err != nil {
-			if errors.Is(err, ErrProcessNotFound) {
+			if errors.Is(err, patcher.ErrProcessNotFound) {
 				fmt.Println("Starting GGST...")
 				err = exec.Command("rundll32", "url.dll,FileProtocolHandler", "steam://rungameid/1384160").Start()
 				if err != nil {
