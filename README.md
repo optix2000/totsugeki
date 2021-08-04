@@ -19,7 +19,9 @@ Removing Totsugeki is as simple as deleting the executable and launching the gam
 - 3-4x Speedup compared to vanilla Strive.
 - No installation or messing with system files. Just download and run.
 - No administrator permissions needed.
-- 100% transparent: Sends data bit-for-bit the same as vanilla Strive. No stat or lobby inconsistencies.
+- *100% transparent: Sends data bit-for-bit the same as vanilla Strive. No stat or lobby inconsistencies.
+
+\* Unless you use [Unsafe Features](https://github.com/optix2000/totsugeki/blob/dev/UNSAFE_FEATURES.md)
 
 ## Advanced Usage
 
@@ -47,6 +49,12 @@ Valid options:
 The easiest way to do this would be to create a shortcut to `totsugeki.exe` and add the argument on the shortcut.
 
 <img src="https://user-images.githubusercontent.com/1121068/127271607-8866b52b-ce69-4661-9fa2-50f00833a1aa.png" alt="Shortcut Properties" width="300">
+
+### More Speedups (Unsafe Features)
+
+Want more speed?
+
+See [UNSAFE_FEATURES.md](https://github.com/optix2000/totsugeki/blob/dev/UNSAFE_FEATURES.md)
 
 ## Building
 

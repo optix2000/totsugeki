@@ -110,6 +110,7 @@ func main() {
 	var noPatch = flag.Bool("no-patch", false, "Don't patch GGST with proxy address.")
 	var noClose = flag.Bool("no-close", false, "Don't automatically close totsugeki alongside GGST.")
 	var unsafeAsyncStatsSet = flag.Bool("unsafe-async-stats-set", false, "UNSAFE: Asynchronously upload stats (R-Code) in the background.")
+	var iKnowWhatImDoing = flag.Bool("i-know-what-im-doing", false, "UNSAFE: Suppress any UNSAFE warnings. I hope you know what you're doing...")
 	var ver = flag.Bool("version", false, "Print the version number and exit.")
 
 	flag.Parse()
@@ -166,6 +167,10 @@ func main() {
 			fmt.Println("Started Proxy Server on port 21611.")
 			server.ListenAndServe()
 		}()
+	}
+
+	if !*iKnowWhatImDoing && (*unsafeAsyncStatsSet) {
+		fmt.Println("WARNING: Unsafe feature used. Make sure you understand the implications: https://github.com/optix2000/totsugeki/blob/master/UNSAFE_FEATURES.md")
 	}
 
 	wg.Wait()
