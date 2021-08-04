@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"runtime/debug"
@@ -14,8 +13,6 @@ import (
 	"github.com/optix2000/totsugeki/patcher"
 	"github.com/optix2000/totsugeki/proxy"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"golang.org/x/sys/windows"
 )
 
@@ -109,6 +106,7 @@ func main() {
 	var noLaunch = flag.Bool("no-launch", false, "Don't launch GGST. Useful if you want to launch GGST through other means.")
 	var noPatch = flag.Bool("no-patch", false, "Don't patch GGST with proxy address.")
 	var noClose = flag.Bool("no-close", false, "Don't automatically close totsugeki alongside GGST.")
+	var unsafeAsyncStatsSet = flag.Bool("unsafe-async-stats-set", false, "UNSAFE: Asynchronously upload stats (R-Code) in the background.")
 	var ver = flag.Bool("version", false, "Print the version number and exit.")
 
 	flag.Parse()
@@ -159,22 +157,11 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			proxy := &proxy.StriveAPIProxy{
-				Client:         &http.Client{Transport: &http.Transport{MaxIdleConnsPerHost: 1, MaxConnsPerHost: 2}},
-				GGStriveAPIURL: GGStriveAPIURL,
-				PatchedAPIURL:  PatchedAPIURL,
-			}
 
-			r := chi.NewRouter()
-			r.Use(middleware.Logger)
-			r.Route("/api", func(r chi.Router) {
-				r.HandleFunc("/sys/get_env", proxy.HandleGetEnv)
-				r.HandleFunc("/*", proxy.HandleCatchall)
-
-			})
+			server := proxy.CreateStriveProxy("127.0.0.1:21611", GGStriveAPIURL, PatchedAPIURL, &proxy.StriveAPIProxyOptions{AsyncStatsSet: *unsafeAsyncStatsSet})
 
 			fmt.Println("Started Proxy Server on port 21611.")
-			http.ListenAndServe("127.0.0.1:21611", r)
+			server.ListenAndServe()
 		}()
 	}
 
