@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -205,7 +206,19 @@ func (s *StriveAPIProxy) Shutdown() {
 func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL string, options *StriveAPIProxyOptions) *http.Server {
 
 	proxy := &StriveAPIProxy{
-		Client:         &http.Client{Transport: &http.Transport{MaxIdleConnsPerHost: 1, MaxConnsPerHost: 2}},
+		Client: &http.Client{
+			Transport: &http.Transport{
+				Proxy:                 http.ProxyFromEnvironment,
+				DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
+				ResponseHeaderTimeout: 1 * time.Minute, // Some people have _really_ slow internet to Japan.
+				MaxIdleConns:          2,
+				MaxIdleConnsPerHost:   1,
+				MaxConnsPerHost:       2,
+				IdleConnTimeout:       90 * time.Second, // Drop idle connection after 90 seconds to balance between being nice to ASW and keeping things fast.
+				TLSHandshakeTimeout:   30 * time.Second,
+			},
+			Timeout: 3 * time.Minute, // 2x the slowest request I've seen.
+		},
 		Server:         &http.Server{Addr: listen},
 		GGStriveAPIURL: GGStriveAPIURL,
 		PatchedAPIURL:  PatchedAPIURL,
