@@ -87,6 +87,9 @@ func watchGGST(noClose bool) {
 		if err != nil {
 			if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
 				fmt.Printf("GGST with PID %d is already patched at offset 0x%x.\n", pid, offset)
+				if !noClose {
+					close = true
+				}
 			} else {
 				fmt.Printf("Error at offset 0x%x: %v", offset, err)
 				panic(err)
