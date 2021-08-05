@@ -22,6 +22,6 @@ These calls are used for updating your R-Code.
 ### Known/Possible issues
 
 Since this mocks a response back to GGST, the response isn't perfect. It's unknown what parts of the response are actually used by GGST, but most seems pretty static or unused. See `HandleStatsSet()` in `proxy.go`.
-It's unknown if other API's expect `/api/statistics/set` to be complete before they get called. In testing GGST didn't behave any differently, but it's still unknown if there are any other side-effects. 
+It's unknown if other API's expect `/api/statistics/set` to be complete before they get called. In testing GGST didn't behave any differently, but it's still unknown if there are any other side-effects.
 
 Can cause your R-Code updates to be lost/corrupt if you close Totsugeki before it finishes uploading your R-Code.
