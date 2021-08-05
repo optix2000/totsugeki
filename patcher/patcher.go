@@ -1,6 +1,7 @@
 package patcher
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -65,7 +66,7 @@ func GetProc(proc string) (uint32, error) {
 	return 0, ErrProcessNotFound
 }
 
-func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old string, new string) (uintptr, error) {
+func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, new []byte) (uintptr, error) {
 	proc, err := windows.OpenProcess(windows.PROCESS_VM_READ|windows.PROCESS_VM_WRITE|windows.PROCESS_VM_OPERATION|windows.PROCESS_QUERY_INFORMATION, false, pid)
 	if err != nil {
 		return 0, fmt.Errorf("error in OpenProcess: %w", err)
@@ -96,8 +97,7 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old string, ne
 		}
 	}
 	if module == 0 {
-		// TODO: Better error handling
-		return 0, errors.New("couldn't find base module for GGST")
+		return 0, fmt.Errorf("couldn't find base module for %v", moduleName)
 	}
 
 	// Get Entrypoint so we have an idea where GGST's memory starts
@@ -125,8 +125,8 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old string, ne
 		return offset, fmt.Errorf("error in ReadProcessMemory: %w", err)
 	}
 
-	if string(buf[:bytesRead]) != old {
-		if string(buf[:min(bytesRead, uint32(len(new)))]) == new {
+	if !bytes.Equal(buf[:bytesRead], old) {
+		if bytes.Equal(buf[:min(bytesRead, uint32(len(new)))], new) {
 			return offset, ErrProcessAlreadyPatched
 		}
 		return offset, fmt.Errorf("%q does not match signature at offset 0x%x", buf[:bytesRead], offset)

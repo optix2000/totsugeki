@@ -83,7 +83,7 @@ func watchGGST(noClose bool) {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		offset, err := patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, GGStriveAPIURL, PatchedAPIURL)
+		offset, err := patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
 		if err != nil {
 			if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
 				fmt.Printf("GGST with PID %d is already patched at offset 0x%x.\n", pid, offset)
