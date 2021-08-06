@@ -151,6 +151,13 @@ func main() {
 	if !*noPatch {
 		wg.Add(1)
 		go func() {
+			// Raise an alert box on panic so non-technical users don't lose the output.
+			defer func() {
+				r := recover()
+				if r != nil {
+					panicBox(r)
+				}
+			}()
 			defer wg.Done()
 			watchGGST(*noClose)
 		}()
@@ -160,6 +167,13 @@ func main() {
 	if !*noProxy {
 		wg.Add(1)
 		go func() {
+			// Raise an alert box on panic so non-technical users don't lose the output.
+			defer func() {
+				r := recover()
+				if r != nil {
+					panicBox(r)
+				}
+			}()
 			defer wg.Done()
 
 			server := proxy.CreateStriveProxy("127.0.0.1:21611", GGStriveAPIURL, PatchedAPIURL, &proxy.StriveAPIProxyOptions{AsyncStatsSet: *unsafeAsyncStatsSet})
