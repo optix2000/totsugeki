@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"runtime/debug"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/optix2000/totsugeki/patcher"
@@ -44,7 +45,13 @@ Please report this to https://github.com/optix2000/totsugeki/issues
 Error: %v
 
 %v`
-	msg, e := windows.UTF16PtrFromString(fmt.Sprintf(header, v, string(debug.Stack())))
+	messageBox(fmt.Sprintf(header, v, string(debug.Stack())))
+
+	panic(v)
+}
+
+func messageBox(message string) {
+	msg, e := windows.UTF16PtrFromString(message)
 	if e != nil {
 		fmt.Println(e)
 		panic(e)
@@ -54,8 +61,6 @@ Error: %v
 		fmt.Println(e)
 		panic(e)
 	}
-
-	panic(v)
 }
 
 // Patch GGST as it starts
@@ -90,6 +95,9 @@ func watchGGST(noClose bool) {
 				if !noClose {
 					close = true
 				}
+			} else if errors.Unwrap(err) == syscall.Errno(windows.ERROR_ACCESS_DENIED) {
+				messageBox("Could not patch GGST. Steam/GGST may be running as Administrator. Try re-running Totsugeki as Administrator.")
+				os.Exit(1)
 			} else {
 				fmt.Printf("Error at offset 0x%x: %v", offset, err)
 				panic(err)
