@@ -99,7 +99,7 @@ func (s *StriveAPIProxy) Shutdown() {
 	s.wg.Wait()
 }
 
-func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL string, options *StriveAPIProxyOptions) *http.Server {
+func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL string, options *StriveAPIProxyOptions) *StriveAPIProxy {
 
 	proxy := &StriveAPIProxy{
 		Client: &http.Client{
@@ -136,5 +136,5 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 	})
 
 	proxy.Server.Handler = r
-	return proxy.Server
+	return proxy
 }

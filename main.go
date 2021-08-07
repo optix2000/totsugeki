@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime/debug"
 	"sync"
 	"syscall"
@@ -34,6 +37,9 @@ const totsugeki = " _____       _                             _     _ \n" +
 	"  | || (_) || |_ \\__ \\| |_| || (_| ||  __/|   < | |\n" +
 	"  |_| \\___/  \\__||___/ \\__,_| \\__, | \\___||_|\\_\\|_|\n" +
 	"                              |___/                "
+
+var server *proxy.StriveAPIProxy
+var sig chan os.Signal
 
 func panicBox(v interface{}) {
 	const header = `Totsugeki has encountered a fatal error.
@@ -64,51 +70,62 @@ func messageBox(message string) {
 }
 
 // Patch GGST as it starts
-func watchGGST(noClose bool) {
+func watchGGST(noClose bool, ctx context.Context) {
 	var patchedPid uint32 = 1
 	var close bool = false
-	for {
-		pid, err := patcher.GetProc(GGStriveExe)
-		if err != nil {
-			if errors.Is(err, patcher.ErrProcessNotFound) && !close {
-				if patchedPid != 0 {
-					fmt.Println("Waiting for GGST process...")
-					patchedPid = 0
-				}
+	fastSleep, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	slowSleep, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 
-				time.Sleep(2 * time.Second)
-				continue
-			} else if close {
-				os.Exit(0)
-			} else {
-				panic(err)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			pid, err := patcher.GetProc(GGStriveExe)
+			if err != nil {
+				if errors.Is(err, patcher.ErrProcessNotFound) && !close {
+					if patchedPid != 0 {
+						fmt.Println("Waiting for GGST process...")
+						patchedPid = 0
+					}
+					fastSleep.Done()
+					continue
+				} else if close {
+					server.Shutdown()
+					sig <- os.Interrupt
+					return
+				} else {
+					panic(err)
+				}
 			}
-		}
-		if pid == patchedPid {
-			time.Sleep(10 * time.Second)
-			continue
-		}
-		offset, err := patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
-		if err != nil {
-			if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
-				fmt.Printf("GGST with PID %d is already patched at offset 0x%x.\n", pid, offset)
+			if pid == patchedPid {
+				slowSleep.Done()
+				continue
+			}
+			offset, err := patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
+			if err != nil {
+				if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
+					fmt.Printf("GGST with PID %d is already patched at offset 0x%x.\n", pid, offset)
+					if !noClose {
+						close = true
+					}
+				} else if errors.Unwrap(err) == syscall.Errno(windows.ERROR_ACCESS_DENIED) {
+					messageBox("Could not patch GGST. Steam/GGST may be running as Administrator. Try re-running Totsugeki as Administrator.")
+					os.Exit(1)
+				} else {
+					fmt.Printf("Error at offset 0x%x: %v", offset, err)
+					panic(err)
+				}
+			} else {
+				fmt.Printf("Patched GGST with PID %d at offset 0x%x.\n", pid, offset)
 				if !noClose {
 					close = true
 				}
-			} else if errors.Unwrap(err) == syscall.Errno(windows.ERROR_ACCESS_DENIED) {
-				messageBox("Could not patch GGST. Steam/GGST may be running as Administrator. Try re-running Totsugeki as Administrator.")
-				os.Exit(1)
-			} else {
-				fmt.Printf("Error at offset 0x%x: %v", offset, err)
-				panic(err)
 			}
-		} else {
-			fmt.Printf("Patched GGST with PID %d at offset 0x%x.\n", pid, offset)
-			if !noClose {
-				close = true
-			}
+			patchedPid = pid
 		}
-		patchedPid = pid
 	}
 }
 
@@ -155,6 +172,18 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sig = make(chan os.Signal, 1)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		cancel()
+		server.Shutdown()
+	}()
 
 	if !*noPatch {
 		wg.Add(1)
@@ -167,7 +196,7 @@ func main() {
 				}
 			}()
 			defer wg.Done()
-			watchGGST(*noClose)
+			watchGGST(*noClose, ctx)
 		}()
 	}
 
@@ -184,10 +213,15 @@ func main() {
 			}()
 			defer wg.Done()
 
-			server := proxy.CreateStriveProxy("127.0.0.1:21611", GGStriveAPIURL, PatchedAPIURL, &proxy.StriveAPIProxyOptions{AsyncStatsSet: *unsafeAsyncStatsSet})
+			server = proxy.CreateStriveProxy("127.0.0.1:21611", GGStriveAPIURL, PatchedAPIURL, &proxy.StriveAPIProxyOptions{AsyncStatsSet: *unsafeAsyncStatsSet})
 
 			fmt.Println("Started Proxy Server on port 21611.")
-			server.ListenAndServe()
+			err := server.Server.ListenAndServe()
+			if err != nil {
+				if !errors.Is(err, http.ErrServerClosed) {
+					panic(err)
+				}
+			}
 		}()
 	}
 
