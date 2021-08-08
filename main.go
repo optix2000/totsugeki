@@ -85,17 +85,19 @@ func watchGGST(noClose bool, ctx context.Context) {
 		default:
 			pid, err := patcher.GetProc(GGStriveExe)
 			if err != nil {
-				if errors.Is(err, patcher.ErrProcessNotFound) && !close {
+				if errors.Is(err, patcher.ErrProcessNotFound) {
+					if close {
+						server.Shutdown()
+						sig <- os.Interrupt
+						return
+					}
+
 					if patchedPid != 0 {
 						fmt.Println("Waiting for GGST process...")
 						patchedPid = 0
 					}
 					fastSleep.Done()
 					continue
-				} else if close {
-					server.Shutdown()
-					sig <- os.Interrupt
-					return
 				} else {
 					panic(err)
 				}
