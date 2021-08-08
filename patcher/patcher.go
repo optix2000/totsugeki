@@ -116,6 +116,51 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 
 	var offset = moduleInfo.LPBaseOfDll + offsetAddr
 
+	// Information about the contents of the memory to read
+	var memoryBasicInfo struct {
+		BaseAddress       uintptr
+		AllocationBase    uintptr
+		AllocationProtect uint32
+		PartitionId       uint32
+		RegionSize        uint64
+		State             uint32
+		Protect           uint32
+		Type              uint32
+	}
+
+	var memoryBasicInfoSize = uint32(unsafe.Sizeof(memoryBasicInfo))
+
+	var p uintptr = moduleInfo.LPBaseOfDll
+
+	// Programmatically find the offset of the API url
+	// Don't search beyond the end of the application memory
+	for p < moduleInfo.LPBaseOfDll+uintptr(moduleInfo.SizeOfImage) {
+		ret, _, err = procVirtualQueryEx.Call(uintptr(proc), p, uintptr(unsafe.Pointer(&memoryBasicInfo)), uintptr(memoryBasicInfoSize))
+		if ret == 0 {
+			return 0, fmt.Errorf("error in VirtualQueryEx: %w", err)
+		} else if ret == unsafe.Sizeof(memoryBasicInfo) {
+			var bytesRead uint32
+			var chunk = make([]byte, memoryBasicInfo.RegionSize)
+			// Read the chunk of memory into a byte array
+			ret, _, err = procReadProcessMemory.Call(uintptr(proc), memoryBasicInfo.BaseAddress, uintptr(unsafe.Pointer(&chunk[0])), uintptr(memoryBasicInfo.RegionSize), uintptr(unsafe.Pointer(&bytesRead)))
+			if ret == 0 {
+				return 0, fmt.Errorf("error in ReadProcessMemory: %w", err)
+			} else if ret != 0 {
+				// See if the chunk contains the API url and get its offset if its there
+				// Only gets the first instance of the API url in memory
+				var ind = bytes.Index(chunk[:bytesRead], []byte(old))
+				if ind != -1 {
+					// Override offset with the found API url index
+					offset = p + uintptr(ind)
+					break
+				}
+			}
+			// If not found in this chunk, try the next chunk
+			p = p + uintptr(memoryBasicInfo.RegionSize)
+		}
+	}
+	// If can't find api url in memory, then use the predefined offset and hope its there
+
 	var buf = make([]byte, len(old))
 	var bytesRead uint32
 
