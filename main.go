@@ -167,6 +167,13 @@ func main() {
 		}
 	}()
 
+	handle := windows.CurrentProcess()
+	err = windows.SetPriorityClass(handle, windows.BELOW_NORMAL_PRIORITY_CLASS)
+	if err != nil {
+		fmt.Println(err)
+	}
+	windows.CloseHandle(handle)
+
 	if !*noLaunch {
 		_, err := patcher.GetProc(GGStriveExe)
 		if err != nil {
