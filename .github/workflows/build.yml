@@ -45,6 +45,7 @@ jobs:
         path: totsugeki.exe
         retention-days: 1
     - uses: optix2000/ghaction-virustotal@v2
+      if: ${{ github.event_name != 'pull_request' }}
       with:
         vt_api_key: ${{ secrets.VIRUSTOTAL_API_KEY }}
         files: totsugeki.exe
