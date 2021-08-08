@@ -77,12 +77,9 @@ func messageBox(message string) {
 func watchGGST(noClose bool, ctx context.Context) {
 	var patchedPid uint32 = 1
 	var close bool = false
-	fastSleep, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	slowSleep, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
 
 	for {
+
 		select {
 		case <-ctx.Done():
 			return
@@ -100,14 +97,18 @@ func watchGGST(noClose bool, ctx context.Context) {
 						fmt.Println("Waiting for GGST process...")
 						patchedPid = 0
 					}
-					fastSleep.Done()
+					fastSleep, fastCancel := context.WithTimeout(ctx, 2*time.Second)
+					<-fastSleep.Done()
+					fastCancel()
 					continue
 				} else {
 					panic(err)
 				}
 			}
 			if pid == patchedPid {
-				slowSleep.Done()
+				slowSleep, slowCancel := context.WithTimeout(ctx, 10*time.Second)
+				<-slowSleep.Done()
+				slowCancel()
 				continue
 			}
 			time.Sleep(100 * time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
