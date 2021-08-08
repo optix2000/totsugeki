@@ -65,7 +65,7 @@ jobs:
     - uses: actions/download-artifact@v2
       with:
         name: totsugeki
-    - uses: softprops/action-gh-release@v1
+    - uses: softprops/action-gh-release@v0.1.7
       with:
         files: totsugeki.exe
     - uses: optix2000/ghaction-virustotal@v2
