@@ -104,6 +104,7 @@ func watchGGST(noClose bool, ctx context.Context) {
 				slowSleep.Done()
 				continue
 			}
+			time.Sleep(100 * time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
 			offset, err := patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
 			if err != nil {
 				if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
