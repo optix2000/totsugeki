@@ -13,6 +13,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/optix2000/totsugeki/patcher"
 	"github.com/optix2000/totsugeki/proxy"
@@ -40,6 +41,9 @@ const totsugeki = " _____       _                             _     _ \n" +
 
 var server *proxy.StriveAPIProxy
 var sig chan os.Signal
+
+var modKernel32 *windows.LazyDLL = windows.NewLazySystemDLL("kernel32.dll")
+var procSetConsoleTitle *windows.LazyProc = modKernel32.NewProc("SetConsoleTitleW")
 
 func panicBox(v interface{}) {
 	const header = `Totsugeki has encountered a fatal error.
@@ -148,6 +152,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	title, err := windows.UTF16PtrFromString(fmt.Sprintf("Totsugeki %s", Version))
+	if err == nil {
+		procSetConsoleTitle.Call(uintptr(unsafe.Pointer(title)))
+	}
 	fmt.Println(totsugeki)
 	fmt.Printf("                                         %s\n", Version)
 
