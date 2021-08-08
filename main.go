@@ -152,6 +152,7 @@ func main() {
 		os.Exit(0)
 	}
 
+	time.Sleep(10)
 	title, err := windows.UTF16PtrFromString(fmt.Sprintf("Totsugeki %s", Version))
 	if err == nil {
 		procSetConsoleTitle.Call(uintptr(unsafe.Pointer(title)))
