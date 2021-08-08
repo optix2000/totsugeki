@@ -13,6 +13,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/optix2000/totsugeki/patcher"
 	"github.com/optix2000/totsugeki/proxy"
@@ -40,6 +41,9 @@ const totsugeki = " _____       _                             _     _ \n" +
 
 var server *proxy.StriveAPIProxy
 var sig chan os.Signal
+
+var modKernel32 *windows.LazyDLL = windows.NewLazySystemDLL("kernel32.dll")
+var procSetConsoleTitle *windows.LazyProc = modKernel32.NewProc("SetConsoleTitleW")
 
 func panicBox(v interface{}) {
 	const header = `Totsugeki has encountered a fatal error.
@@ -73,37 +77,41 @@ func messageBox(message string) {
 func watchGGST(noClose bool, ctx context.Context) {
 	var patchedPid uint32 = 1
 	var close bool = false
-	fastSleep, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	slowSleep, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
 
 	for {
+
 		select {
 		case <-ctx.Done():
 			return
 		default:
 			pid, err := patcher.GetProc(GGStriveExe)
 			if err != nil {
-				if errors.Is(err, patcher.ErrProcessNotFound) && !close {
+				if errors.Is(err, patcher.ErrProcessNotFound) {
+					if close {
+						server.Shutdown()
+						sig <- os.Interrupt
+						return
+					}
+
 					if patchedPid != 0 {
 						fmt.Println("Waiting for GGST process...")
 						patchedPid = 0
 					}
-					fastSleep.Done()
+					fastSleep, fastCancel := context.WithTimeout(ctx, 2*time.Second)
+					<-fastSleep.Done()
+					fastCancel()
 					continue
-				} else if close {
-					server.Shutdown()
-					sig <- os.Interrupt
-					return
 				} else {
 					panic(err)
 				}
 			}
 			if pid == patchedPid {
-				slowSleep.Done()
+				slowSleep, slowCancel := context.WithTimeout(ctx, 10*time.Second)
+				<-slowSleep.Done()
+				slowCancel()
 				continue
 			}
+			time.Sleep(100 * time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
 			offset, err := patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
 			if err != nil {
 				if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
@@ -145,6 +153,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	title, err := windows.UTF16PtrFromString(fmt.Sprintf("Totsugeki %s", Version))
+	if err == nil {
+		procSetConsoleTitle.Call(uintptr(unsafe.Pointer(title)))
+	}
 	fmt.Println(totsugeki)
 	fmt.Printf("                                         %s\n", Version)
 
@@ -155,6 +167,13 @@ func main() {
 			panicBox(r)
 		}
 	}()
+
+	handle := windows.CurrentProcess()
+	err = windows.SetPriorityClass(handle, windows.BELOW_NORMAL_PRIORITY_CLASS)
+	if err != nil {
+		fmt.Println(err)
+	}
+	windows.CloseHandle(handle)
 
 	if !*noLaunch {
 		_, err := patcher.GetProc(GGStriveExe)

@@ -11,6 +11,12 @@ defaults:
     shell: bash
 
 jobs:
+  lint:
+    if: ${{ github.event_name != 'release'}}
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: golangci/golangci-lint-action@v2
   build:
     runs-on: windows-latest
     steps:
@@ -45,6 +51,7 @@ jobs:
         path: totsugeki.exe
         retention-days: 1
     - uses: optix2000/ghaction-virustotal@v2
+      if: ${{ github.event_name != 'pull_request' }}
       with:
         vt_api_key: ${{ secrets.VIRUSTOTAL_API_KEY }}
         files: totsugeki.exe
