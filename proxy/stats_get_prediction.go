@@ -8,11 +8,9 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 )
 
 const StatsGetWorkers = 5
@@ -30,6 +28,7 @@ type StatsGetPrediction struct {
 	// Counts up for env->login->stats/get, to kick off Async StatsGet predictive cache
 	statsGetPredictionCounter int
 	statsGetTasks             map[string]*StatsGetTask
+	client                    *http.Client
 }
 
 func (s *StatsGetPrediction) HandleCatchallPath(path string) {
@@ -164,20 +163,6 @@ func (s *StatsGetPrediction) BuildStatsReqBody(login string, req string) string 
 }
 
 func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
-	client := http.Client{
-		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
-			ResponseHeaderTimeout: 1 * time.Minute, // Some people have _really_ slow internet to Japan.
-			MaxIdleConns:          2,
-			MaxIdleConnsPerHost:   1,
-			MaxConnsPerHost:       2,
-			IdleConnTimeout:       90 * time.Second, // Drop idle connection after 90 seconds to balance between being nice to ASW and keeping things fast.
-			TLSHandshakeTimeout:   30 * time.Second,
-		},
-		Timeout: 3 * time.Minute, // 2x the slowest request I've seen.
-	}
-
 	for {
 		select {
 		case item := <-queue:
@@ -207,7 +192,7 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 			req.URL = apiURL
 			req.Host = ""
 			req.RequestURI = ""
-			res, err := client.Do(req)
+			res, err := s.client.Do(req)
 
 			if err != nil {
 				fmt.Print("Res error: ")
@@ -241,13 +226,14 @@ func (s *StatsGetPrediction) AsyncGetStats() {
 		go s.ProcessStatsQueue(queue)
 	}
 }
-func CreateStatsGetPrediction(enabled bool, GGStriveAPIURL string) StatsGetPrediction {
+func CreateStatsGetPrediction(enabled bool, GGStriveAPIURL string, client *http.Client) StatsGetPrediction {
 	return StatsGetPrediction{
 		enable:                    enabled,
 		GGStriveAPIURL:            GGStriveAPIURL,
 		loginPrefix:               "",
 		statsGetPredictionCounter: 0,
 		statsGetTasks:             make(map[string]*StatsGetTask),
+		client:                    client,
 	}
 }
 
