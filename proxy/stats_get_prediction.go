@@ -10,7 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
+	"strings"
 )
 
 const StatsGetWorkers = 5
@@ -181,18 +181,19 @@ func (s *StatsGetPrediction) BuildStatsReqBody(login string, req string) string 
 		l=1
 	*/
 
-	body := "data=" +
-		"9295" + // Header
-		login +
-		"02a5" + // Divider
-		"302e302e35" + // 0.0.5
-		"0396" + // Divider 2
-		req +
-		"\x00" // End
-
-	return body
+	var sb strings.Builder
+	sb.WriteString("data=")
+	sb.WriteString("9295") // Header
+	sb.WriteString(login)
+	sb.WriteString("02a5")       // Divider
+	sb.WriteString("302e302e35") // 0.0.5
+	sb.WriteString("0396")       // Divider 2
+	sb.WriteString(req)
+	sb.WriteString("\x00") // End
+	return sb.String()
 }
 
+// Process the filled queue, then exit when it's empty
 func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 	for {
 		select {
@@ -209,7 +210,6 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 			req.Header.Set("Cache-Control", "no-cache")
 			req.Header.Set("Cookie", "theme=theme-dark")
 			req.Header.Set("User-Agent", "Steam")
-			req.Header.Set("Content-Length", strconv.Itoa(len(item.request)))
 
 			apiURL, err := url.Parse(s.GGStriveAPIURL) // TODO: Const this
 			if err != nil {
