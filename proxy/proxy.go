@@ -16,13 +16,12 @@ import (
 )
 
 type StriveAPIProxy struct {
-	Client             *http.Client
-	Server             *http.Server
-	GGStriveAPIURL     string
-	PatchedAPIURL      string
-	statsQueue         chan<- *http.Request
-	wg                 sync.WaitGroup
-	statsGetPrediction StatsGetPrediction
+	Client         *http.Client
+	Server         *http.Server
+	GGStriveAPIURL string
+	PatchedAPIURL  string
+	statsQueue     chan<- *http.Request
+	wg             sync.WaitGroup
 }
 
 type StriveAPIProxyOptions struct {
@@ -46,7 +45,6 @@ func (s *StriveAPIProxy) proxyRequest(r *http.Request) (*http.Response, error) {
 
 // Proxy everything else
 func (s *StriveAPIProxy) HandleCatchall(w http.ResponseWriter, r *http.Request) {
-	s.statsGetPrediction.HandleCatchallPath(r.URL.Path)
 	resp, err := s.proxyRequest(r)
 	if err != nil {
 		fmt.Println(err)
@@ -83,44 +81,9 @@ func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println(err)
-	} else {
-		s.statsGetPrediction.HandleGetEnv()
 	}
 	buf = bytes.Replace(buf, []byte(s.GGStriveAPIURL), []byte(s.PatchedAPIURL), -1)
 	w.Write(buf)
-}
-
-// Copy of HandleCatchall that sends a copy of login data to statsGetPrediction
-func (s *StriveAPIProxy) HandleLogin(w http.ResponseWriter, r *http.Request) {
-	resp, err := s.proxyRequest(r)
-	if err != nil {
-		fmt.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-
-	}
-	defer resp.Body.Close()
-	// Copy headers
-	for name, values := range resp.Header {
-		w.Header()[name] = values
-
-	}
-	w.WriteHeader(resp.StatusCode)
-	reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-	ret, err := io.ReadAll(reader)
-	if err != nil {
-		fmt.Println(err)
-	} else {
-		s.statsGetPrediction.HandleLoginData(ret)
-	}
-
-}
-
-// Handles using statsGetPrediction or falls back
-func (s *StriveAPIProxy) HandleGetStats(w http.ResponseWriter, r *http.Request) {
-	if !s.statsGetPrediction.HandleGetStats(w, r) {
-		s.HandleCatchall(w, r)
-	}
 }
 
 func (s *StriveAPIProxy) Shutdown() {
@@ -145,8 +108,8 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 			DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
 			ResponseHeaderTimeout: 1 * time.Minute, // Some people have _really_ slow internet to Japan.
 			MaxIdleConns:          2,
-			MaxIdleConnsPerHost:   2,
-			MaxConnsPerHost:       4,
+			MaxIdleConnsPerHost:   1,
+			MaxConnsPerHost:       6,
 			IdleConnTimeout:       90 * time.Second, // Drop idle connection after 90 seconds to balance between being nice to ASW and keeping things fast.
 			TLSHandshakeTimeout:   30 * time.Second,
 		},
@@ -154,26 +117,34 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 	}
 
 	proxy := &StriveAPIProxy{
-		Client:             client,
-		Server:             &http.Server{Addr: listen},
-		GGStriveAPIURL:     GGStriveAPIURL,
-		PatchedAPIURL:      PatchedAPIURL,
-		statsGetPrediction: CreateStatsGetPrediction(options.PredictStatsGet, GGStriveAPIURL, client),
+		Client:         client,
+		Server:         &http.Server{Addr: listen},
+		GGStriveAPIURL: GGStriveAPIURL,
+		PatchedAPIURL:  PatchedAPIURL,
 	}
 
 	statsSet := proxy.HandleCatchall
+	statsGet := proxy.HandleCatchall
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
 
 	if options.AsyncStatsSet {
 		statsSet = proxy.HandleStatsSet
 		proxy.statsQueue = proxy.startStatsSender()
 	}
+	if options.PredictStatsGet {
+		prediction := CreateStatsGetPrediction(GGStriveAPIURL, client)
+		r.Use(prediction.StatsGetStateHandler)
+		statsGet = func(w http.ResponseWriter, r *http.Request) {
+			if !prediction.HandleGetStats(w, r) {
+				proxy.HandleCatchall(w, r)
+			}
+		}
+	}
 
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
 	r.Route("/api", func(r chi.Router) {
 		r.HandleFunc("/sys/get_env", proxy.HandleGetEnv)
-		r.HandleFunc("/user/login", proxy.HandleLogin)
-		r.HandleFunc("/statistics/get", proxy.HandleGetStats)
+		r.HandleFunc("/statistics/get", statsGet)
 		r.HandleFunc("/statistics/set", statsSet)
 		r.HandleFunc("/*", proxy.HandleCatchall)
 	})

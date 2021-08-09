@@ -21,53 +21,85 @@ type StatsGetTask struct {
 }
 
 type StatsGetPrediction struct {
-	enable         bool
-	GGStriveAPIURL string
-	loginPrefix    string
-	// TODO: Improve this.
-	// Counts up for env->login->stats/get, to kick off Async StatsGet predictive cache
-	statsGetPredictionCounter int
-	statsGetTasks             map[string]*StatsGetTask
-	client                    *http.Client
+	GGStriveAPIURL  string
+	loginPrefix     string
+	predictionState PredictionState
+	statsGetTasks   map[string]*StatsGetTask
+	client          *http.Client
 }
 
-func (s *StatsGetPrediction) HandleCatchallPath(path string) {
-	if !s.enable {
-		return
-	}
-	if s.statsGetPredictionCounter > 0 && path != "/statistics/get" {
-		fmt.Println("Done looking up stats")
-		s.statsGetPredictionCounter = 0
-	}
+type PredictionState int
+
+// Declare typed constants each with type of status
+const (
+	reset PredictionState = iota
+	get_env_called
+	login_parsed
+	sending_calls
+)
+
+type CachingResponseWriter struct {
+	w    http.ResponseWriter
+	buf  bytes.Buffer
+	code int
 }
 
-func (s *StatsGetPrediction) HandleGetEnv() {
-	if !s.enable {
-		return
-	}
-	s.statsGetPredictionCounter = 1
+func (rw *CachingResponseWriter) Header() http.Header {
+	return rw.w.Header()
 }
 
-func (s *StatsGetPrediction) HandleLoginData(login []byte) {
-	if !s.enable {
-		return
-	}
-	if s.statsGetPredictionCounter == 1 {
-		s.statsGetPredictionCounter = 2
-		s.ParseLoginPrefix(login)
-	}
+func (rw *CachingResponseWriter) WriteHeader(statusCode int) {
+	rw.w.WriteHeader(statusCode)
+	rw.code = statusCode
+}
+
+func (rw *CachingResponseWriter) Write(data []byte) (int, error) {
+	rw.buf.Write(data)
+	return rw.w.Write(data)
+}
+
+func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if s.predictionState != reset &&
+			path != "/api/sys/get_env" &&
+			path != "/api/user/login" &&
+			path != "/api/statistics/get" {
+			if s.predictionState == sending_calls {
+				fmt.Println("Done looking up stats")
+			}
+			s.predictionState = reset
+		}
+
+		if path == "/api/sys/get_env" || path == "/api/user/login" {
+			wrappedWriter := CachingResponseWriter{w: w}
+			next.ServeHTTP(&wrappedWriter, r)
+
+			if path == "/api/sys/get_env" && wrappedWriter.code < 400 {
+				s.predictionState = get_env_called
+			} else if path == "/api/user/login" &&
+				wrappedWriter.code < 400 &&
+				s.predictionState == get_env_called {
+				login := make([]byte, wrappedWriter.buf.Len())
+
+				wrappedWriter.buf.Read(login)
+				s.ParseLoginPrefix(login)
+				s.predictionState = login_parsed
+			}
+		} else {
+			next.ServeHTTP(w, r)
+		}
+	})
+
 }
 
 // Proxy getstats
 func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Request) bool {
-	if !s.enable {
-		return false
-	}
-	if len(s.loginPrefix) > 0 && s.statsGetPredictionCounter == 2 {
+	if len(s.loginPrefix) > 0 && s.predictionState == login_parsed {
 		s.AsyncGetStats()
-		s.statsGetPredictionCounter = 3
+		s.predictionState = sending_calls
 	}
-	if len(s.loginPrefix) > 0 && s.statsGetPredictionCounter == 3 {
+	if len(s.loginPrefix) > 0 && s.predictionState == sending_calls {
 		bodyBytes, _ := ioutil.ReadAll(r.Body)
 		r.Body.Close() //  must close
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
@@ -95,7 +127,6 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 		}
 		fmt.Println("Cache miss! " + req)
 		return false
-
 	}
 	return false
 }
@@ -226,14 +257,13 @@ func (s *StatsGetPrediction) AsyncGetStats() {
 		go s.ProcessStatsQueue(queue)
 	}
 }
-func CreateStatsGetPrediction(enabled bool, GGStriveAPIURL string, client *http.Client) StatsGetPrediction {
+func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsGetPrediction {
 	return StatsGetPrediction{
-		enable:                    enabled,
-		GGStriveAPIURL:            GGStriveAPIURL,
-		loginPrefix:               "",
-		statsGetPredictionCounter: 0,
-		statsGetTasks:             make(map[string]*StatsGetTask),
-		client:                    client,
+		GGStriveAPIURL:  GGStriveAPIURL,
+		loginPrefix:     "",
+		predictionState: reset,
+		statsGetTasks:   make(map[string]*StatsGetTask),
+		client:          client,
 	}
 }
 
