@@ -59,60 +59,58 @@ func SearchMemory(proc windows.Handle, LPBaseOfDll uintptr, SizeOfImage uint32, 
 
 	var p uintptr = LPBaseOfDll
 	var offset uintptr
-	var MAX_CHUNK_SIZE uint32 = 4096 // Just an abitrary size
+	var MAX_CHUNK_SIZE uintptr = 4096 // Just an abitrary size
 	chunk := make([]byte, MAX_CHUNK_SIZE)
 	// Programmatically find the offset of the API url
 	// Don't search beyond the end of the application memory
 	for p < LPBaseOfDll+uintptr(SizeOfImage) {
 		ret, _, err := procVirtualQueryEx.Call(uintptr(proc), p, uintptr(unsafe.Pointer(&memoryBasicInfo)), uintptr(memoryBasicInfoSize))
-
-		if ret == unsafe.Sizeof(memoryBasicInfo) {
-			var bytesRead uint32
-			var chunkIndex uint32
-			// chunkRollover moves the last bit of the chunk to the beginning of the next chunk
-			// This way, if the API is across 2 chunk, it will be caught. Basically an easy but inefficient circular buffer
-			// The size of the chunkRollover is the size of the biggest thing we are looking for
-			// The longer the string we are looking for, the less efficient the search is, could look at making the chunk bigger to offset
-			var chunkRollover = max(uint32(unsafe.Sizeof(value)), uint32(unsafe.Sizeof(altvalue)))
-
-			for chunkIndex < uint32(memoryBasicInfo.RegionSize) {
-				// Read the chunk of memory into a byte array, It doesn't matter if we ask for more data than the size of the region
-				ret, _, err = procReadProcessMemory.Call(uintptr(proc), memoryBasicInfo.BaseAddress+uintptr(chunkIndex), uintptr(unsafe.Pointer(&chunk[chunkRollover])), uintptr(MAX_CHUNK_SIZE-chunkRollover), uintptr(unsafe.Pointer(&bytesRead)))
-				if ret == 0 {
-					return 0, fmt.Errorf("error in ReadProcessMemory: %w", err)
-				}
-
-				if ret != 0 {
-					// See if the chunk contains the API url and get its offset if its there
-					// Only gets the first instance of the API url in memory
-					var ind = bytes.Index(chunk[chunkRollover:bytesRead], value)
-					if ind != -1 {
-						// Override offset with the found API url index
-						offset = p + uintptr(chunkIndex) + uintptr(ind)
-						return offset, nil
-					}
-					// If the chunk doesn't have the API address, check if its already been patched?
-					ind = bytes.Index(chunk[chunkRollover:bytesRead], altvalue)
-					if ind != -1 {
-						offset = p + uintptr(chunkIndex) + uintptr(ind)
-						return offset, ErrProcessAlreadyPatched
-					}
-				}
-
-				chunkIndex = chunkIndex + bytesRead
-				// Move the last bytes of the chunk to the beginning
-				rollover := chunk[bytesRead-chunkRollover : bytesRead]
-				chunk = append(rollover, chunk...)
-				// Cut off the size of the chunk so it doesn't keep growing
-				chunk = chunk[:MAX_CHUNK_SIZE]
-			}
-			// If not found in this region, try the next region
-			p = p + uintptr(memoryBasicInfo.RegionSize)
-		} else {
+		if ret != unsafe.Sizeof(memoryBasicInfo) {
 			return 0, fmt.Errorf("error in VirtualQueryEx: %w", err)
 		}
+
+		var bytesRead uintptr
+		var chunkIndex uintptr
+		// chunkRollover moves the last bit of the chunk to the beginning of the next chunk
+		// This way, if the API is across 2 chunk, it will be caught. Basically an easy but inefficient circular buffer
+		// The size of the chunkRollover is the size of the biggest thing we are looking for
+		// The longer the string we are looking for, the less efficient the search is, could look at making the chunk bigger to offset
+		var chunkRollover = uintptr(max(uint32(unsafe.Sizeof(value)), uint32(unsafe.Sizeof(altvalue))))
+
+		for chunkIndex < memoryBasicInfo.RegionSize {
+			// Read the chunk of memory into a byte array, It doesn't matter if we ask for more data than the size of the region
+			ret, _, err = procReadProcessMemory.Call(uintptr(proc), memoryBasicInfo.BaseAddress+chunkIndex, uintptr(unsafe.Pointer(&chunk[chunkRollover])), MAX_CHUNK_SIZE-chunkRollover, uintptr(unsafe.Pointer(&bytesRead)))
+			if ret == 0 {
+				return 0, fmt.Errorf("error in ReadProcessMemory: %w", err)
+			}
+
+			if ret != 0 {
+				// See if the chunk contains the API url and get its offset if its there
+				// Only gets the first instance of the API url in memory
+				var ind = bytes.Index(chunk[chunkRollover:bytesRead], value)
+				if ind != -1 {
+					// Override offset with the found API url index
+					offset = p + chunkIndex + uintptr(ind)
+					return offset, nil
+				}
+				// If the chunk doesn't have the API address, check if its already been patched?
+				ind = bytes.Index(chunk[chunkRollover:bytesRead], altvalue)
+				if ind != -1 {
+					offset = p + chunkIndex + uintptr(ind)
+					return offset, ErrProcessAlreadyPatched
+				}
+			}
+
+			chunkIndex = chunkIndex + bytesRead
+			// Move the last bytes of the chunk to the beginning
+			rollover := chunk[bytesRead-chunkRollover : bytesRead]
+			chunk = append(rollover, chunk...)
+			// Cut off the size of the chunk so it doesn't keep growing
+			chunk = chunk[:MAX_CHUNK_SIZE]
+		}
+		// If not found in this region, try the next region
+		p = p + memoryBasicInfo.RegionSize
 	}
-	// If can't find api url in memory, then use the predefined offset and hope its there
 
 	return 0, ErrAPINotFound
 }
