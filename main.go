@@ -143,7 +143,7 @@ func main() {
 	var noPatch = flag.Bool("no-patch", false, "Don't patch GGST with proxy address.")
 	var noClose = flag.Bool("no-close", false, "Don't automatically close totsugeki alongside GGST.")
 	var unsafeAsyncStatsSet = flag.Bool("unsafe-async-stats-set", false, "UNSAFE: Asynchronously upload stats (R-Code) in the background.")
-	var predictStatsGet = flag.Bool("predict-stats-get", false, "Asynchronously precache expected statistics/get calls.")
+	var unsafePredictStatsGet = flag.Bool("unsafe-predict-stats-get", false, "Asynchronously precache expected statistics/get calls.")
 	var iKnowWhatImDoing = flag.Bool("i-know-what-im-doing", false, "UNSAFE: Suppress any UNSAFE warnings. I hope you know what you're doing...")
 	var ver = flag.Bool("version", false, "Print the version number and exit.")
 
@@ -235,7 +235,7 @@ func main() {
 
 			server = proxy.CreateStriveProxy("127.0.0.1:21611", GGStriveAPIURL, PatchedAPIURL, &proxy.StriveAPIProxyOptions{
 				AsyncStatsSet:   *unsafeAsyncStatsSet,
-				PredictStatsGet: *predictStatsGet,
+				PredictStatsGet: *unsafePredictStatsGet,
 			})
 
 			fmt.Println("Started Proxy Server on port 21611.")
@@ -248,7 +248,7 @@ func main() {
 		}()
 	}
 
-	if !*iKnowWhatImDoing && (*unsafeAsyncStatsSet) {
+	if !*iKnowWhatImDoing && (*unsafeAsyncStatsSet || *unsafePredictStatsGet) {
 		fmt.Println("WARNING: Unsafe feature used. Make sure you understand the implications: https://github.com/optix2000/totsugeki/blob/master/UNSAFE_FEATURES.md")
 	}
 
