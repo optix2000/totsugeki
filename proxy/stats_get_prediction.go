@@ -209,7 +209,6 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 			req.RequestURI = ""
 			res, err := client.Do(req)
 
-			//res, err := s.proxyRequest(req)
 			if err != nil {
 				fmt.Print("Res error: ")
 				fmt.Println(err)
