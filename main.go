@@ -143,6 +143,7 @@ func main() {
 	var noPatch = flag.Bool("no-patch", false, "Don't patch GGST with proxy address.")
 	var noClose = flag.Bool("no-close", false, "Don't automatically close totsugeki alongside GGST.")
 	var unsafeAsyncStatsSet = flag.Bool("unsafe-async-stats-set", false, "UNSAFE: Asynchronously upload stats (R-Code) in the background.")
+	var predictStatsGet = flag.Bool("predict-stats-get", false, "Asynchronously precache expected statistics/get calls.")
 	var iKnowWhatImDoing = flag.Bool("i-know-what-im-doing", false, "UNSAFE: Suppress any UNSAFE warnings. I hope you know what you're doing...")
 	var ver = flag.Bool("version", false, "Print the version number and exit.")
 
@@ -232,7 +233,10 @@ func main() {
 			}()
 			defer wg.Done()
 
-			server = proxy.CreateStriveProxy("127.0.0.1:21611", GGStriveAPIURL, PatchedAPIURL, &proxy.StriveAPIProxyOptions{AsyncStatsSet: *unsafeAsyncStatsSet})
+			server = proxy.CreateStriveProxy("127.0.0.1:21611", GGStriveAPIURL, PatchedAPIURL, &proxy.StriveAPIProxyOptions{
+				AsyncStatsSet:   *unsafeAsyncStatsSet,
+				PredictStatsGet: *predictStatsGet,
+			})
 
 			fmt.Println("Started Proxy Server on port 21611.")
 			err := server.Server.ListenAndServe()

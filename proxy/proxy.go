@@ -16,16 +16,18 @@ import (
 )
 
 type StriveAPIProxy struct {
-	Client         *http.Client
-	Server         *http.Server
-	GGStriveAPIURL string
-	PatchedAPIURL  string
-	statsQueue     chan<- *http.Request
-	wg             sync.WaitGroup
+	Client             *http.Client
+	Server             *http.Server
+	GGStriveAPIURL     string
+	PatchedAPIURL      string
+	statsQueue         chan<- *http.Request
+	wg                 sync.WaitGroup
+	statsGetPrediction StatsGetPrediction
 }
 
 type StriveAPIProxyOptions struct {
-	AsyncStatsSet bool
+	AsyncStatsSet   bool
+	PredictStatsGet bool
 }
 
 func (s *StriveAPIProxy) proxyRequest(r *http.Request) (*http.Response, error) {
@@ -44,6 +46,7 @@ func (s *StriveAPIProxy) proxyRequest(r *http.Request) (*http.Response, error) {
 
 // Proxy everything else
 func (s *StriveAPIProxy) HandleCatchall(w http.ResponseWriter, r *http.Request) {
+	s.statsGetPrediction.HandleCatchallPath(r.URL.Path)
 	resp, err := s.proxyRequest(r)
 	if err != nil {
 		fmt.Println(err)
@@ -80,9 +83,44 @@ func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println(err)
+	} else {
+		s.statsGetPrediction.HandleGetEnv()
 	}
 	buf = bytes.Replace(buf, []byte(s.GGStriveAPIURL), []byte(s.PatchedAPIURL), -1)
 	w.Write(buf)
+}
+
+// Copy of HandleCatchall that sends a copy of login data to statsGetPrediction
+func (s *StriveAPIProxy) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	resp, err := s.proxyRequest(r)
+	if err != nil {
+		fmt.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+
+	}
+	defer resp.Body.Close()
+	// Copy headers
+	for name, values := range resp.Header {
+		w.Header()[name] = values
+
+	}
+	w.WriteHeader(resp.StatusCode)
+	reader := io.TeeReader(resp.Body, w) // For dumping API payloads
+	ret, err := io.ReadAll(reader)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		s.statsGetPrediction.HandleLoginData(ret)
+	}
+
+}
+
+// Handles using statsGetPrediction or falls back
+func (s *StriveAPIProxy) HandleGetStats(w http.ResponseWriter, r *http.Request) {
+	if !s.statsGetPrediction.HandleGetStats(w, r) {
+		s.HandleCatchall(w, r)
+	}
 }
 
 func (s *StriveAPIProxy) Shutdown() {
@@ -115,9 +153,10 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 			},
 			Timeout: 3 * time.Minute, // 2x the slowest request I've seen.
 		},
-		Server:         &http.Server{Addr: listen},
-		GGStriveAPIURL: GGStriveAPIURL,
-		PatchedAPIURL:  PatchedAPIURL,
+		Server:             &http.Server{Addr: listen},
+		GGStriveAPIURL:     GGStriveAPIURL,
+		PatchedAPIURL:      PatchedAPIURL,
+		statsGetPrediction: CreateStatsGetPrediction(options.PredictStatsGet, GGStriveAPIURL),
 	}
 
 	statsSet := proxy.HandleCatchall
@@ -131,6 +170,8 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 	r.Use(middleware.Logger)
 	r.Route("/api", func(r chi.Router) {
 		r.HandleFunc("/sys/get_env", proxy.HandleGetEnv)
+		r.HandleFunc("/user/login", proxy.HandleLogin)
+		r.HandleFunc("/statistics/get", proxy.HandleGetStats)
 		r.HandleFunc("/statistics/set", statsSet)
 		r.HandleFunc("/*", proxy.HandleCatchall)
 	})
