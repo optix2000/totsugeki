@@ -88,7 +88,6 @@ func watchGGST(noClose bool, ctx context.Context) {
 			if err != nil {
 				if errors.Is(err, patcher.ErrProcessNotFound) {
 					if close {
-						server.Shutdown()
 						sig <- os.Interrupt
 						return
 					}
