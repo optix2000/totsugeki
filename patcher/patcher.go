@@ -26,12 +26,113 @@ var procGetModuleFileNameExA *windows.LazyProc = modPSAPI.NewProc("GetModuleFile
 // Errors
 var ErrProcessAlreadyPatched = errors.New("process already patched")
 var ErrProcessNotFound = errors.New("couldn't find process")
+var ErrAPINotFound = errors.New("couldn't find API address in memory")
 
 func min(a uint32, b uint32) uint32 {
 	if a > b {
 		return b
 	}
 	return a
+}
+
+func max(a uint32, b uint32) uint32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func SearchMemory(proc windows.Handle, LPBaseOfDll uintptr, SizeOfImage uint32, value []byte, altvalue []byte) (uintptr, error) {
+	// Information about the contents of the memory to read
+	var memoryBasicInfo struct {
+		BaseAddress       uintptr
+		AllocationBase    uintptr
+		AllocationProtect uint32
+		PartitionId       uint16
+		RegionSize        uintptr
+		State             uint32
+		Protect           uint32
+		Type              uint32
+	}
+
+	var memoryBasicInfoSize = uint32(unsafe.Sizeof(memoryBasicInfo))
+
+	var p uintptr = LPBaseOfDll
+	var offset uintptr
+	var MAX_CHUNK_SIZE uintptr = 4096 // Just an abitrary size
+	chunk := make([]byte, MAX_CHUNK_SIZE)
+	// Programmatically find the offset of the API url
+	// Don't search beyond the end of the application memory
+	for p < LPBaseOfDll+uintptr(SizeOfImage) {
+		ret, _, err := procVirtualQueryEx.Call(uintptr(proc), p, uintptr(unsafe.Pointer(&memoryBasicInfo)), uintptr(memoryBasicInfoSize))
+		if ret != unsafe.Sizeof(memoryBasicInfo) {
+			return 0, fmt.Errorf("error in VirtualQueryEx: %w", err)
+		}
+
+		var bytesRead uintptr
+		var chunkIndex uintptr
+		// chunkRollover moves the last bit of the chunk to the beginning of the next chunk
+		// This way, if the API is across 2 chunk, it will be caught. Basically an easy but inefficient circular buffer
+		// The size of the chunkRollover is the size of the biggest thing we are looking for
+		// The longer the string we are looking for, the less efficient the search is, could look at making the chunk bigger to offset
+		var chunkRollover = uintptr(max(uint32(unsafe.Sizeof(value)), uint32(unsafe.Sizeof(altvalue))))
+
+		for chunkIndex < memoryBasicInfo.RegionSize {
+			// Read the chunk of memory into a byte array, It doesn't matter if we ask for more data than the size of the region
+			ret, _, err = procReadProcessMemory.Call(uintptr(proc), memoryBasicInfo.BaseAddress+chunkIndex, uintptr(unsafe.Pointer(&chunk[chunkRollover])), MAX_CHUNK_SIZE-chunkRollover, uintptr(unsafe.Pointer(&bytesRead)))
+			if ret == 0 {
+				return 0, fmt.Errorf("error in ReadProcessMemory: %w", err)
+			}
+
+			if ret != 0 {
+				// See if the chunk contains the API url and get its offset if its there
+				// Only gets the first instance of the API url in memory
+				var ind = bytes.Index(chunk[chunkRollover:bytesRead], value)
+				if ind != -1 {
+					// Override offset with the found API url index
+					offset = p + chunkIndex + uintptr(ind)
+					return offset, nil
+				}
+				// If the chunk doesn't have the API address, check if its already been patched?
+				ind = bytes.Index(chunk[chunkRollover:bytesRead], altvalue)
+				if ind != -1 {
+					offset = p + chunkIndex + uintptr(ind)
+					return offset, ErrProcessAlreadyPatched
+				}
+			}
+
+			chunkIndex = chunkIndex + bytesRead
+			// Move the last bytes of the chunk to the beginning
+			rollover := chunk[bytesRead-chunkRollover : bytesRead]
+			chunk = append(rollover, chunk...)
+			// Cut off the size of the chunk so it doesn't keep growing
+			chunk = chunk[:MAX_CHUNK_SIZE]
+		}
+		// If not found in this region, try the next region
+		p = p + memoryBasicInfo.RegionSize
+	}
+
+	return 0, ErrAPINotFound
+}
+
+func VerifyAPIOffset(proc windows.Handle, offset uintptr, old []byte, new []byte) (uintptr, error) {
+	var buf = make([]byte, len(old))
+	var bytesRead uint32
+
+	// Verify we're at the correct offset
+	ret, _, err := procReadProcessMemory.Call(uintptr(proc), offset, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(old)), uintptr(unsafe.Pointer(&bytesRead)))
+	if ret == 0 { // err is always set, even on success. Need to look at return value
+		return offset, fmt.Errorf("error in ReadProcessMemory: %w", err)
+	}
+
+	if !bytes.Equal(buf[:bytesRead], old) {
+		if bytes.Equal(buf[:min(bytesRead, uint32(len(new)))], new) {
+			return offset, ErrProcessAlreadyPatched
+		}
+		return offset, fmt.Errorf("%q does not match signature at offset 0x%x", buf[:bytesRead], offset)
+	}
+
+	return offset, nil
 }
 
 func GetProc(proc string) (uint32, error) {
@@ -116,20 +217,14 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 
 	var offset = moduleInfo.LPBaseOfDll + offsetAddr
 
-	var buf = make([]byte, len(old))
-	var bytesRead uint32
-
-	// Verify we're at the correct offset
-	ret, _, err = procReadProcessMemory.Call(uintptr(proc), offset, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(old)), uintptr(unsafe.Pointer(&bytesRead)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
-		return offset, fmt.Errorf("error in ReadProcessMemory: %w", err)
-	}
-
-	if !bytes.Equal(buf[:bytesRead], old) {
-		if bytes.Equal(buf[:min(bytesRead, uint32(len(new)))], new) {
-			return offset, ErrProcessAlreadyPatched
+	// Check if the API is at the offset specified
+	offset, err = VerifyAPIOffset(proc, offset, old, new)
+	if err != nil {
+		// If the offset doesn't have the old or new API address, try searching memory
+		offset, err = SearchMemory(proc, moduleInfo.LPBaseOfDll, moduleInfo.SizeOfImage, old, new)
+		if err != nil {
+			return offset, err
 		}
-		return offset, fmt.Errorf("%q does not match signature at offset 0x%x", buf[:bytesRead], offset)
 	}
 
 	// Set memory writable
@@ -140,7 +235,7 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 	}
 
 	var bytesWritten uint32
-	buf = make([]byte, len(old))
+	buf := make([]byte, len(old))
 	copy(buf, new)
 	ret, _, err = procWriteProcessMemory.Call(uintptr(proc), offset, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(old)), uintptr(unsafe.Pointer(&bytesWritten)))
 	if ret == 0 { // err is always set, even on success. Need to look at return value
