@@ -1,9 +1,6 @@
-# Unsafe Features
+# Unsafe Speedups
 
-These are features that can provide extra speedups, but will lose the transparency guarantee. This means we cannot guarantee that the request and response are identical to what GGST and the server would do.
-
-These features _may_ cause GGST to behave weirdly and/or increase the chances of getting rate-limited by the server.
-Please read through and understand the implications before enabling these features.
+These are speedups that can provide extra speed increases, but may cause weird bugs or break GGST. These speedups have generally been tested, but may not work for everyone.
 
 Use at your own risk.
 
