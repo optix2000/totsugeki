@@ -80,9 +80,8 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 			} else if path == "/api/user/login" &&
 				wrappedWriter.code < 400 &&
 				s.predictionState == get_env_called {
-				login := make([]byte, wrappedWriter.buf.Len())
 
-				wrappedWriter.buf.Read(login)
+				login := wrappedWriter.buf.Bytes()
 				s.ParseLoginPrefix(login)
 				s.predictionState = login_parsed
 			}
@@ -101,8 +100,8 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 	}
 	if len(s.loginPrefix) > 0 && s.predictionState == sending_calls {
 		bodyBytes, _ := ioutil.ReadAll(r.Body)
-		r.Body.Close() //  must close
-		r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+		r.Body.Close()                                        //  must close
+		r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes)) // Reset Body as the request gets reused by catchall if this has an error.
 		req := string(bodyBytes)
 		if task, ok := s.statsGetTasks[req]; ok {
 			resp := <-task.response
@@ -117,8 +116,7 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 				w.Header()[name] = values
 			}
 			w.WriteHeader(resp.StatusCode)
-			reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-			_, err := io.ReadAll(reader)
+			_, err := io.Copy(w, resp.Body)
 			if err != nil {
 				fmt.Println(err)
 			}
