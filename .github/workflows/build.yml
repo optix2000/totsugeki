@@ -46,6 +46,7 @@ jobs:
         go generate
     - run: go build -v -trimpath -ldflags="-X main.Version=$(git describe --always --tags --dirty --broken)"
     - run: go build -v -trimpath -ldflags="-X main.Version=$(git describe --always --tags --dirty --broken)-unga-bunga -X main.UngaBungaMode=true" -o totsugeki-unga-bunga.exe
+      if: ${{ github.event_name == 'release'}}
     - uses: actions/upload-artifact@v2
       with:
         name: totsugeki
