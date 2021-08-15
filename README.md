@@ -42,6 +42,8 @@ Valid options:
         Don't start local proxy. Useful if you want to run your own proxy.
   -no-close
         Don't automatically close totsugeki alongside GGST. (v1.0.0+)
+  -unga-bunga
+        Enable all unsafe speedups for maximum speed. Please read https://github.com/optix2000/totsugeki/blob/dev/UNSAFE_SPEEDUPS.md (v1.2.0+)
   -version
         Print the version number and exit.
 ```
@@ -54,7 +56,7 @@ The easiest way to do this would be to create a shortcut to `totsugeki.exe` and 
 
 Want more speed?
 
-See [UNSAFE_SPEEDUPS.md](https://github.com/optix2000/totsugeki/blob/dev/UNSAFE_SPEEDUPS.md)
+See `-unga-bunga` and [UNSAFE_SPEEDUPS.md](https://github.com/optix2000/totsugeki/blob/dev/UNSAFE_SPEEDUPS.md)
 
 ## Building
 
@@ -84,4 +86,3 @@ With Totsugeki, this is brought down to a mere 38 seconds.
 This has added bonus of reducing GGST server load, as TLS negotiation is one of the most CPU intensive tasks today.
 
 Thanks to u/TarballX for doing the initial research on why GGST takes so long to connect.
-
