@@ -24,6 +24,7 @@ import (
 //go:generate go-winres make --product-version=git-tag --file-version=git-tag
 
 var Version string = "(unknown version)"
+var UngaBungaMode string = ""
 
 const GGStriveExe = "GGST-Win64-Shipping.exe"
 
@@ -143,7 +144,7 @@ func main() {
 	var noClose = flag.Bool("no-close", false, "Don't automatically close totsugeki alongside GGST.")
 	var unsafeAsyncStatsSet = flag.Bool("unsafe-async-stats-set", false, "UNSAFE: Asynchronously upload stats (R-Code) in the background.")
 	var unsafePredictStatsGet = flag.Bool("unsafe-predict-stats-get", false, "UNSAFE: Asynchronously precache expected statistics/get calls.")
-	var ungaBunga = flag.Bool("unga-bunga", false, "Enable all unsafe speedups for maximum speed. Please read https://github.com/optix2000/totsugeki/blob/dev/UNSAFE_SPEEDUPS.md")
+	var ungaBunga = flag.Bool("unga-bunga", UngaBungaMode != "", "Enable all unsafe speedups for maximum speed. Please read https://github.com/optix2000/totsugeki/blob/dev/UNSAFE_SPEEDUPS.md")
 	var iKnowWhatImDoing = flag.Bool("i-know-what-im-doing", false, "UNSAFE: Suppress any UNSAFE warnings. I hope you know what you're doing...")
 	var ver = flag.Bool("version", false, "Print the version number and exit.")
 

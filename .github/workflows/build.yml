@@ -45,16 +45,17 @@ jobs:
         go install github.com/tc-hib/go-winres@latest
         go generate
     - run: go build -v -trimpath -ldflags="-X main.Version=$(git describe --always --tags --dirty --broken)"
+    - run: go build -v -trimpath -ldflags="-X main.Version=$(git describe --always --tags --dirty --broken)-unga-bunga -X main.UngaBungaMode=true" -o totsugeki-unga-bunga.exe
     - uses: actions/upload-artifact@v2
       with:
         name: totsugeki
-        path: totsugeki.exe
+        path: totsugeki*.exe
         retention-days: 1
     - uses: optix2000/ghaction-virustotal@v2
       if: ${{ github.event_name != 'pull_request' }}
       with:
         vt_api_key: ${{ secrets.VIRUSTOTAL_API_KEY }}
-        files: totsugeki.exe
+        files: totsugeki*.exe
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -67,9 +68,9 @@ jobs:
         name: totsugeki
     - uses: softprops/action-gh-release@v0.1.7
       with:
-        files: totsugeki.exe
+        files: totsugeki*.exe
     - uses: optix2000/ghaction-virustotal@v2
       with:
         vt_api_key: ${{ secrets.VIRUSTOTAL_API_KEY }}
-        files: totsugeki.exe
+        files: totsugeki*.exe
         update_release_body: true
