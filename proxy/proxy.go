@@ -102,22 +102,23 @@ func (s *StriveAPIProxy) Shutdown() {
 
 func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL string, options *StriveAPIProxyOptions) *StriveAPIProxy {
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
-			ResponseHeaderTimeout: 1 * time.Minute, // Some people have _really_ slow internet to Japan.
-			MaxIdleConns:          2,
-			MaxIdleConnsPerHost:   1,
-			MaxConnsPerHost:       5,
-			IdleConnTimeout:       90 * time.Second, // Drop idle connection after 90 seconds to balance between being nice to ASW and keeping things fast.
-			TLSHandshakeTimeout:   30 * time.Second,
-		},
-		Timeout: 3 * time.Minute, // 2x the slowest request I've seen.
+	transport := http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
+		ResponseHeaderTimeout: 1 * time.Minute, // Some people have _really_ slow internet to Japan.
+		MaxIdleConns:          2,
+		MaxIdleConnsPerHost:   1,
+		MaxConnsPerHost:       2,
+		IdleConnTimeout:       90 * time.Second, // Drop idle connection after 90 seconds to balance between being nice to ASW and keeping things fast.
+		TLSHandshakeTimeout:   30 * time.Second,
+	}
+	client := http.Client{
+		Transport: &transport,
+		Timeout:   3 * time.Minute, // 2x the slowest request I've seen.
 	}
 
 	proxy := &StriveAPIProxy{
-		Client:         client,
+		Client:         &client,
 		Server:         &http.Server{Addr: listen},
 		GGStriveAPIURL: GGStriveAPIURL,
 		PatchedAPIURL:  PatchedAPIURL,
@@ -133,7 +134,14 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 		proxy.statsQueue = proxy.startStatsSender()
 	}
 	if options.PredictStatsGet {
-		prediction := CreateStatsGetPrediction(GGStriveAPIURL, client)
+		predictStatsTransport := transport
+		predictStatsTransport.MaxIdleConns = StatsGetWorkers
+		predictStatsTransport.MaxIdleConnsPerHost = StatsGetWorkers
+		predictStatsTransport.IdleConnTimeout = 10 * time.Second // Quickly drop connections since this is a one-shot.
+		predictStatsClient := client
+		predictStatsClient.Transport = &predictStatsTransport
+
+		prediction := CreateStatsGetPrediction(GGStriveAPIURL, &predictStatsClient)
 		r.Use(prediction.StatsGetStateHandler)
 		statsGet = func(w http.ResponseWriter, r *http.Request) {
 			if !prediction.HandleGetStats(w, r) {
