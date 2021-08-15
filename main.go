@@ -255,7 +255,7 @@ func main() {
 	}
 
 	if !*iKnowWhatImDoing && (*unsafeAsyncStatsSet || *unsafePredictStatsGet) {
-		fmt.Println("WARNING: Unsafe feature used. Make sure you understand the implications: https://github.com/optix2000/totsugeki/blob/master/UNSAFE_FEATURES.md")
+		fmt.Println("WARNING: Unsafe feature used. Make sure you understand the implications: https://github.com/optix2000/totsugeki/blob/master/UNSAFE_SPEEDUPS.md")
 	}
 
 	wg.Wait()
