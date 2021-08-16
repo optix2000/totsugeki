@@ -180,7 +180,9 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 
 	ret, _, err := procEnumProcessModules.Call(uintptr(proc), uintptr(unsafe.Pointer(&modules)), uintptr(cb), uintptr(unsafe.Pointer(&cbNeeded)))
 	if ret == 0 { // err is always set, even on success. Need to look at return value
-		return 0, fmt.Errorf("error in EnumProcessModules: %w", err)
+		if err != windows.ERROR_PARTIAL_COPY { // Partial copies are fine
+			return 0, fmt.Errorf("error in EnumProcessModules: %w", err)
+		}
 	}
 
 	// Look for base module
