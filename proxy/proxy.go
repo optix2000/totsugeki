@@ -137,6 +137,7 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 		predictStatsTransport := transport
 		predictStatsTransport.MaxIdleConns = StatsGetWorkers
 		predictStatsTransport.MaxIdleConnsPerHost = StatsGetWorkers
+		predictStatsTransport.MaxConnsPerHost = StatsGetWorkers
 		predictStatsTransport.IdleConnTimeout = 10 * time.Second // Quickly drop connections since this is a one-shot.
 		predictStatsClient := client
 		predictStatsClient.Transport = &predictStatsTransport
