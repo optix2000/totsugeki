@@ -83,17 +83,18 @@ func (s *StriveAPIProxy) startStatsSender() chan<- *http.Request {
 			// Retry the writes, since we're now responsible for them.
 			// Loses transparency here as we don't may not react the same was as the client.
 			for i := 0; i < 5; i++ { // GGST retries 5 times on stats/write
-				rl.Wait(context.Background())
 				newReq := req.Clone(context.Background())
 				res, err := s.proxyRequest(newReq) // TODO: Maybe capture result to fake hashes better.
 				if err != nil {
 					fmt.Println(err)
+					rl.Wait(context.Background())
 					continue
 				}
 				if res.StatusCode != http.StatusOK {
 					fmt.Println(res)
 					io.Copy(io.Discard, res.Body)
 					res.Body.Close()
+					rl.Wait(context.Background())
 					continue
 				}
 				fmt.Println("Asynchronously uploaded stats.")
