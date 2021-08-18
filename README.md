@@ -16,12 +16,12 @@ Removing Totsugeki is as simple as deleting the executable and launching the gam
 
 ## Features
 
-- 3-4x Speedup compared to vanilla Strive.
+- 3-4x Speedup compared to vanilla Strive. \*6x+ speedup with Unga-Bunga enabled.
 - No installation or messing with system files. Just download and run.
 - No administrator permissions needed.
-- *100% transparent: Sends data bit-for-bit the same as vanilla Strive. No stat or lobby inconsistencies.
+- \*100% transparent: Sends data bit-for-bit the same as vanilla Strive. No stat or lobby inconsistencies.
 
-\* Unless you use [Unsafe Speedups](https://github.com/optix2000/totsugeki/blob/dev/UNSAFE_SPEEDUPS.md)
+\* See [Unga-Bunga/Unsafe Speedups](https://github.com/optix2000/totsugeki/blob/master/UNSAFE_SPEEDUPS.md). Unga-Bunga/Unsafe Speedups makes GGST much faster, but makes Totsugeki no longer transparent and may cause other issues.
 
 ## Advanced Usage
 
