@@ -4,6 +4,12 @@ These are speedups that can provide extra speed increases, but may cause weird b
 
 Use at your own risk.
 
+## `-unga-bunga`
+
+(v1.2.0+)
+
+Enable all below features.
+
 ## `-unsafe-async-stats-set`
 
 (v1.1.0+)
