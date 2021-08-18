@@ -27,6 +27,7 @@ var procGetModuleFileNameExA *windows.LazyProc = modPSAPI.NewProc("GetModuleFile
 var ErrProcessAlreadyPatched = errors.New("process already patched")
 var ErrProcessNotFound = errors.New("couldn't find process")
 var ErrAPINotFound = errors.New("couldn't find API address in memory")
+var ErrOffsetMismatch = errors.New("offset found at different location")
 
 func min(a uint32, b uint32) uint32 {
 	if a > b {
@@ -250,5 +251,9 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 		return offset, fmt.Errorf("error in VirtualProtectEx: %w", err)
 	}
 
-	return offset, nil
+	err = nil
+	if offsetAddr != (offset - moduleInfo.LPBaseOfDll) {
+		err = ErrOffsetMismatch
+	}
+	return offset, err
 }
