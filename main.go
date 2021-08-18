@@ -23,6 +23,7 @@ import (
 
 //go:generate go-winres make --product-version=git-tag --file-version=git-tag
 
+// Filled in at build time
 var Version string = "(unknown version)"
 var UngaBungaMode string = ""
 
