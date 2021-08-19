@@ -159,6 +159,15 @@ func main() {
 	if err == nil {
 		procSetConsoleTitle.Call(uintptr(unsafe.Pointer(title)))
 	}
+	handle, err := windows.GetStdHandle(windows.STD_INPUT_HANDLE)
+	if err == nil {
+		var mode uint32
+		err = windows.GetConsoleMode(handle, &mode)
+		if err == nil {
+			windows.SetConsoleMode(handle, (mode&^windows.ENABLE_QUICK_EDIT_MODE)|windows.ENABLE_EXTENDED_FLAGS) // Disable QuickEdit mode
+		}
+		windows.CloseHandle(handle)
+	}
 	fmt.Println(totsugeki)
 	fmt.Printf("                                         %s\n", Version)
 
@@ -175,7 +184,7 @@ func main() {
 		*unsafePredictStatsGet = true
 	}
 
-	handle := windows.CurrentProcess()
+	handle = windows.CurrentProcess()
 	err = windows.SetPriorityClass(handle, windows.BELOW_NORMAL_PRIORITY_CLASS)
 	if err != nil {
 		fmt.Println(err)
