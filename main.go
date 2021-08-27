@@ -178,7 +178,7 @@ func main() {
 	if *ungaBunga { // Mash only
 		*unsafeAsyncStatsSet = true
 		*unsafePredictStatsGet = true
-		*unsafeCacheNews = true
+		*unsafeNoNews = true
 	}
 
 	handle := windows.CurrentProcess()
