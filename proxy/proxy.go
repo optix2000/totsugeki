@@ -21,11 +21,15 @@ type StriveAPIProxy struct {
 	PatchedAPIURL  string
 	statsQueue     chan<- *http.Request
 	wg             sync.WaitGroup
+	cachedNewsReq  *http.Response
+	cachedNewsBody []byte
 }
 
 type StriveAPIProxyOptions struct {
 	AsyncStatsSet   bool
 	PredictStatsGet bool
+	CacheNews       bool
+	NoNews          bool
 }
 
 func (s *StriveAPIProxy) proxyRequest(r *http.Request) (*http.Response, error) {
@@ -85,6 +89,36 @@ func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
 	w.Write(buf)
 }
 
+// UNSAFE: Cache news on first request. On every other request return the cached value.
+func (s *StriveAPIProxy) HandleGetNews(w http.ResponseWriter, r *http.Request) {
+	if s.cachedNewsReq != nil {
+		for name, values := range s.cachedNewsReq.Header {
+			w.Header()[name] = values
+		}
+		w.Write(s.cachedNewsBody)
+	} else {
+		resp, err := s.proxyRequest(r)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+		// Copy headers
+		for name, values := range resp.Header {
+			w.Header()[name] = values
+		}
+		w.WriteHeader(resp.StatusCode)
+		reader := io.TeeReader(resp.Body, w) // For dumping API payloads
+		buf, err := io.ReadAll(reader)
+		if err != nil {
+			fmt.Println(err)
+		}
+		s.cachedNewsReq = resp
+		s.cachedNewsBody = buf
+	}
+}
+
 func (s *StriveAPIProxy) Shutdown() {
 	fmt.Println("Shutting down proxy...")
 
@@ -121,6 +155,7 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 
 	statsSet := proxy.HandleCatchall
 	statsGet := proxy.HandleCatchall
+	getNews := proxy.HandleCatchall
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
@@ -145,11 +180,19 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 			}
 		}
 	}
+	if options.NoNews {
+		getNews = func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte{})
+		}
+	} else if options.CacheNews {
+		getNews = proxy.HandleGetNews
+	}
 
 	r.Route("/api", func(r chi.Router) {
 		r.HandleFunc("/sys/get_env", proxy.HandleGetEnv)
 		r.HandleFunc("/statistics/get", statsGet)
 		r.HandleFunc("/statistics/set", statsSet)
+		r.HandleFunc("/sys/get_news", getNews)
 		r.HandleFunc("/*", proxy.HandleCatchall)
 	})
 

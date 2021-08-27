@@ -19,6 +19,14 @@
         "mode": "auto",
         "program": "${workspaceFolder}/main.go",
         "args": ["-unga-bunga"]
+    },
+    {
+        "name": "Launch No-News",
+        "type": "go",
+        "request": "launch",
+        "mode": "auto",
+        "program": "${workspaceFolder}/main.go",
+        "args": ["-unsafe-no-news"]
     }
     ]
 }
