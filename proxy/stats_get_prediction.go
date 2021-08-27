@@ -23,6 +23,7 @@ type StatsGetTask struct {
 type StatsGetPrediction struct {
 	GGStriveAPIURL  string
 	loginPrefix     string
+	apiVersion      string
 	predictionState PredictionState
 	statsGetTasks   map[string]*StatsGetTask
 	client          *http.Client
@@ -76,6 +77,8 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 			next.ServeHTTP(&wrappedWriter, r)
 
 			if path == "/api/sys/get_env" && wrappedWriter.code < 400 {
+				body := wrappedWriter.buf.Bytes()
+				s.ParseApiVersion(body)
 				s.predictionState = get_env_called
 			} else if path == "/api/user/login" &&
 				wrappedWriter.code < 400 &&
@@ -133,7 +136,11 @@ func (s *StatsGetPrediction) ParseLoginPrefix(loginRet []byte) {
 	s.loginPrefix = hex.EncodeToString(loginRet[60:79]) + hex.EncodeToString(loginRet[2:16])
 }
 
-func (s *StatsGetPrediction) BuildStatsReqBody(login string, req string) string {
+func (s *StatsGetPrediction) ParseApiVersion(getEnvBody []byte) {
+	s.apiVersion = hex.EncodeToString([]byte(strings.Split(string(getEnvBody), "\xa5")[1]))
+}
+
+func (s *StatsGetPrediction) BuildStatsReqBody(login string, req string, apiVersion string) string {
 	/*
 
 		Get Stats Call Analysis
@@ -183,9 +190,9 @@ func (s *StatsGetPrediction) BuildStatsReqBody(login string, req string) string 
 	sb.WriteString("data=")
 	sb.WriteString("9295") // Header
 	sb.WriteString(login)
-	sb.WriteString("02a5")       // Divider
-	sb.WriteString("302e302e35") // 0.0.5
-	sb.WriteString("0396")       // Divider 2
+	sb.WriteString("02a5")     // Divider
+	sb.WriteString(apiVersion) // 0.0.5
+	sb.WriteString("0396")     // Divider 2
 	sb.WriteString(req)
 	sb.WriteString("\x00") // End
 	return sb.String()
@@ -244,7 +251,7 @@ func (s *StatsGetPrediction) AsyncGetStats() {
 
 	queue := make(chan *StatsGetTask, len(reqs)+1)
 	for _, val := range reqs {
-		id := s.BuildStatsReqBody(s.loginPrefix, val)
+		id := s.BuildStatsReqBody(s.loginPrefix, val, s.apiVersion)
 		task := &StatsGetTask{id, make(chan *http.Response)}
 
 		s.statsGetTasks[id] = task
@@ -259,6 +266,7 @@ func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsG
 	return StatsGetPrediction{
 		GGStriveAPIURL:  GGStriveAPIURL,
 		loginPrefix:     "",
+		apiVersion:      hex.EncodeToString([]byte("0.0.6")),
 		predictionState: reset,
 		statsGetTasks:   make(map[string]*StatsGetTask),
 		client:          client,
