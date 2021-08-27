@@ -19,6 +19,14 @@
         "mode": "auto",
         "program": "${workspaceFolder}/main.go",
         "args": ["-unga-bunga"]
+    },
+    {
+        "name": "Launch Cache-News",
+        "type": "go",
+        "request": "launch",
+        "mode": "auto",
+        "program": "${workspaceFolder}/main.go",
+        "args": ["-unsafe-cache-news"]
     }
     ]
 }
