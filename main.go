@@ -75,6 +75,12 @@ func messageBox(message string) {
 	}
 }
 
+func cancelableSleep(ctx context.Context, delay time.Duration) {
+	wait, waitCancel := context.WithTimeout(ctx, delay)
+	<-wait.Done()
+	waitCancel()
+}
+
 // Patch GGST as it starts
 func watchGGST(noClose bool, ctx context.Context) {
 	var patchedPid uint32 = 1
@@ -98,21 +104,18 @@ func watchGGST(noClose bool, ctx context.Context) {
 						fmt.Println("Waiting for GGST process...")
 						patchedPid = 0
 					}
-					fastSleep, fastCancel := context.WithTimeout(ctx, 2*time.Second)
-					<-fastSleep.Done()
-					fastCancel()
+					cancelableSleep(ctx, 2*time.Second)
 					continue
 				} else {
 					panic(err)
 				}
 			}
 			if pid == patchedPid {
-				slowSleep, slowCancel := context.WithTimeout(ctx, 10*time.Second)
-				<-slowSleep.Done()
-				slowCancel()
+				cancelableSleep(ctx, 10*time.Second)
 				continue
 			}
-			time.Sleep(100 * time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
+
+			cancelableSleep(ctx, 100*time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
 			offset, err := patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
 			if err != nil {
 				if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
