@@ -15,15 +15,11 @@ import (
 
 const StatsGetWorkers = 5
 
-type StatsGetDef struct {
-	request string
-	path    string
-}
-
 type StatsGetTask struct {
+	data     string
+	path     string
 	request  string
 	response chan *http.Response
-	path     string
 }
 
 type StatsGetPrediction struct {
@@ -254,12 +250,14 @@ func (s *StatsGetPrediction) AsyncGetStats() {
 	reqs := s.ExpectedStatsGetCalls()
 
 	queue := make(chan *StatsGetTask, len(reqs)+1)
-	for _, val := range reqs {
-		id := s.BuildStatsReqBody(s.loginPrefix, val.request, s.apiVersion)
-		task := &StatsGetTask{id, make(chan *http.Response), val.path}
+	for i, _ := range reqs {
+		task := reqs[i]
+		id := s.BuildStatsReqBody(s.loginPrefix, task.data, s.apiVersion)
+		task.request = id
+		task.response = make(chan *http.Response)
 
-		s.statsGetTasks[id] = task
-		queue <- task
+		s.statsGetTasks[id] = &task
+		queue <- &task
 	}
 
 	for i := 0; i < StatsGetWorkers; i++ {
@@ -277,104 +275,104 @@ func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsG
 	}
 }
 
-func (s *StatsGetPrediction) ExpectedStatsGetCalls() []StatsGetDef {
-	return []StatsGetDef{
-		{"96a007ffffffff", "statistics/get"},
-		{"96a009ffffffff", "statistics/get"},
-		{"96a008ff00ffff", "statistics/get"},
-		{"96a008ff01ffff", "statistics/get"},
-		{"96a008ff02ffff", "statistics/get"},
-		{"96a008ff03ffff", "statistics/get"},
-		{"96a008ff04ffff", "statistics/get"},
-		{"96a008ff05ffff", "statistics/get"},
-		{"96a008ff06ffff", "statistics/get"},
-		{"96a008ff07ffff", "statistics/get"},
-		{"96a008ff08ffff", "statistics/get"},
-		{"96a008ff09ffff", "statistics/get"},
-		{"96a008ff0affff", "statistics/get"},
-		{"96a008ff0bffff", "statistics/get"},
-		{"96a008ff0cffff", "statistics/get"},
-		{"96a008ff0dffff", "statistics/get"},
-		{"96a008ff0effff", "statistics/get"},
-		{"96a008ff0fffff", "statistics/get"},
-		{"96a008ff10ffff", "statistics/get"},
-		{"96a008ffffffff", "statistics/get"},
-		{"96a006ff00ffff", "statistics/get"},
-		{"96a006ff01ffff", "statistics/get"},
-		{"96a006ff02ffff", "statistics/get"},
-		{"96a006ff03ffff", "statistics/get"},
-		{"96a006ff04ffff", "statistics/get"},
-		{"96a006ff05ffff", "statistics/get"},
-		{"96a006ff06ffff", "statistics/get"},
-		{"96a006ff07ffff", "statistics/get"},
-		{"96a006ff08ffff", "statistics/get"},
-		{"96a006ff09ffff", "statistics/get"},
-		{"96a006ff0affff", "statistics/get"},
-		{"96a006ff0bffff", "statistics/get"},
-		{"96a006ff0cffff", "statistics/get"},
-		{"96a006ff0dffff", "statistics/get"},
-		{"96a006ff0effff", "statistics/get"},
-		{"96a006ff0fffff", "statistics/get"},
-		{"96a006ff10ffff", "statistics/get"},
-		{"96a006ffffffff", "statistics/get"},
-		{"96a005ffffffff", "statistics/get"},
-		{"96a0020100ffff", "statistics/get"},
-		{"96a0020101ffff", "statistics/get"},
-		{"96a0020102ffff", "statistics/get"},
-		{"96a0020103ffff", "statistics/get"},
-		{"96a0020104ffff", "statistics/get"},
-		{"96a0020105ffff", "statistics/get"},
-		{"96a0020106ffff", "statistics/get"},
-		{"96a0020107ffff", "statistics/get"},
-		{"96a0020108ffff", "statistics/get"},
-		{"96a0020109ffff", "statistics/get"},
-		{"96a002010affff", "statistics/get"},
-		{"96a002010bffff", "statistics/get"},
-		{"96a002010cffff", "statistics/get"},
-		{"96a002010dffff", "statistics/get"},
-		{"96a002010effff", "statistics/get"},
-		{"96a002010fffff", "statistics/get"},
-		{"96a0020110ffff", "statistics/get"},
-		{"96a00201ffffff", "statistics/get"},
-		{"96a0010100feff", "statistics/get"},
-		{"96a0010100ffff", "statistics/get"},
-		{"96a0010101feff", "statistics/get"},
-		{"96a0010101ffff", "statistics/get"},
-		{"96a0010102feff", "statistics/get"},
-		{"96a0010102ffff", "statistics/get"},
-		{"96a0010103feff", "statistics/get"},
-		{"96a0010103ffff", "statistics/get"},
-		{"96a0010104feff", "statistics/get"},
-		{"96a0010104ffff", "statistics/get"},
-		{"96a0010105feff", "statistics/get"},
-		{"96a0010105ffff", "statistics/get"},
-		{"96a0010106feff", "statistics/get"},
-		{"96a0010106ffff", "statistics/get"},
-		{"96a0010107feff", "statistics/get"},
-		{"96a0010107ffff", "statistics/get"},
-		{"96a0010108feff", "statistics/get"},
-		{"96a0010108ffff", "statistics/get"},
-		{"96a0010109feff", "statistics/get"},
-		{"96a0010109ffff", "statistics/get"},
-		{"96a001010afeff", "statistics/get"},
-		{"96a001010affff", "statistics/get"},
-		{"96a001010bfeff", "statistics/get"},
-		{"96a001010bffff", "statistics/get"},
-		{"96a001010cfeff", "statistics/get"},
-		{"96a001010cffff", "statistics/get"},
-		{"96a001010dfeff", "statistics/get"},
-		{"96a001010dffff", "statistics/get"},
-		{"96a001010efeff", "statistics/get"},
-		{"96a001010effff", "statistics/get"},
-		{"96a001010ffeff", "statistics/get"},
-		{"96a001010fffff", "statistics/get"},
-		{"96a0010110feff", "statistics/get"},
-		{"96a0010110ffff", "statistics/get"},
-		{"96a00101fffeff", "statistics/get"},
-		{"96a00101ffffff", "statistics/get"},
-		{"93000101", "catalog/get_follow"},
-		{"920101", "catalog/get_block"},
-		{"91a0", "lobby/get_vip_status"},
-		{"9105", "item/get_item"},
+func (s *StatsGetPrediction) ExpectedStatsGetCalls() []StatsGetTask {
+	return []StatsGetTask{
+		{data: "96a007ffffffff", path: "statistics/get"},
+		{data: "96a009ffffffff", path: "statistics/get"},
+		{data: "96a008ff00ffff", path: "statistics/get"},
+		{data: "96a008ff01ffff", path: "statistics/get"},
+		{data: "96a008ff02ffff", path: "statistics/get"},
+		{data: "96a008ff03ffff", path: "statistics/get"},
+		{data: "96a008ff04ffff", path: "statistics/get"},
+		{data: "96a008ff05ffff", path: "statistics/get"},
+		{data: "96a008ff06ffff", path: "statistics/get"},
+		{data: "96a008ff07ffff", path: "statistics/get"},
+		{data: "96a008ff08ffff", path: "statistics/get"},
+		{data: "96a008ff09ffff", path: "statistics/get"},
+		{data: "96a008ff0affff", path: "statistics/get"},
+		{data: "96a008ff0bffff", path: "statistics/get"},
+		{data: "96a008ff0cffff", path: "statistics/get"},
+		{data: "96a008ff0dffff", path: "statistics/get"},
+		{data: "96a008ff0effff", path: "statistics/get"},
+		{data: "96a008ff0fffff", path: "statistics/get"},
+		{data: "96a008ff10ffff", path: "statistics/get"},
+		{data: "96a008ffffffff", path: "statistics/get"},
+		{data: "96a006ff00ffff", path: "statistics/get"},
+		{data: "96a006ff01ffff", path: "statistics/get"},
+		{data: "96a006ff02ffff", path: "statistics/get"},
+		{data: "96a006ff03ffff", path: "statistics/get"},
+		{data: "96a006ff04ffff", path: "statistics/get"},
+		{data: "96a006ff05ffff", path: "statistics/get"},
+		{data: "96a006ff06ffff", path: "statistics/get"},
+		{data: "96a006ff07ffff", path: "statistics/get"},
+		{data: "96a006ff08ffff", path: "statistics/get"},
+		{data: "96a006ff09ffff", path: "statistics/get"},
+		{data: "96a006ff0affff", path: "statistics/get"},
+		{data: "96a006ff0bffff", path: "statistics/get"},
+		{data: "96a006ff0cffff", path: "statistics/get"},
+		{data: "96a006ff0dffff", path: "statistics/get"},
+		{data: "96a006ff0effff", path: "statistics/get"},
+		{data: "96a006ff0fffff", path: "statistics/get"},
+		{data: "96a006ff10ffff", path: "statistics/get"},
+		{data: "96a006ffffffff", path: "statistics/get"},
+		{data: "96a005ffffffff", path: "statistics/get"},
+		{data: "96a0020100ffff", path: "statistics/get"},
+		{data: "96a0020101ffff", path: "statistics/get"},
+		{data: "96a0020102ffff", path: "statistics/get"},
+		{data: "96a0020103ffff", path: "statistics/get"},
+		{data: "96a0020104ffff", path: "statistics/get"},
+		{data: "96a0020105ffff", path: "statistics/get"},
+		{data: "96a0020106ffff", path: "statistics/get"},
+		{data: "96a0020107ffff", path: "statistics/get"},
+		{data: "96a0020108ffff", path: "statistics/get"},
+		{data: "96a0020109ffff", path: "statistics/get"},
+		{data: "96a002010affff", path: "statistics/get"},
+		{data: "96a002010bffff", path: "statistics/get"},
+		{data: "96a002010cffff", path: "statistics/get"},
+		{data: "96a002010dffff", path: "statistics/get"},
+		{data: "96a002010effff", path: "statistics/get"},
+		{data: "96a002010fffff", path: "statistics/get"},
+		{data: "96a0020110ffff", path: "statistics/get"},
+		{data: "96a00201ffffff", path: "statistics/get"},
+		{data: "96a0010100feff", path: "statistics/get"},
+		{data: "96a0010100ffff", path: "statistics/get"},
+		{data: "96a0010101feff", path: "statistics/get"},
+		{data: "96a0010101ffff", path: "statistics/get"},
+		{data: "96a0010102feff", path: "statistics/get"},
+		{data: "96a0010102ffff", path: "statistics/get"},
+		{data: "96a0010103feff", path: "statistics/get"},
+		{data: "96a0010103ffff", path: "statistics/get"},
+		{data: "96a0010104feff", path: "statistics/get"},
+		{data: "96a0010104ffff", path: "statistics/get"},
+		{data: "96a0010105feff", path: "statistics/get"},
+		{data: "96a0010105ffff", path: "statistics/get"},
+		{data: "96a0010106feff", path: "statistics/get"},
+		{data: "96a0010106ffff", path: "statistics/get"},
+		{data: "96a0010107feff", path: "statistics/get"},
+		{data: "96a0010107ffff", path: "statistics/get"},
+		{data: "96a0010108feff", path: "statistics/get"},
+		{data: "96a0010108ffff", path: "statistics/get"},
+		{data: "96a0010109feff", path: "statistics/get"},
+		{data: "96a0010109ffff", path: "statistics/get"},
+		{data: "96a001010afeff", path: "statistics/get"},
+		{data: "96a001010affff", path: "statistics/get"},
+		{data: "96a001010bfeff", path: "statistics/get"},
+		{data: "96a001010bffff", path: "statistics/get"},
+		{data: "96a001010cfeff", path: "statistics/get"},
+		{data: "96a001010cffff", path: "statistics/get"},
+		{data: "96a001010dfeff", path: "statistics/get"},
+		{data: "96a001010dffff", path: "statistics/get"},
+		{data: "96a001010efeff", path: "statistics/get"},
+		{data: "96a001010effff", path: "statistics/get"},
+		{data: "96a001010ffeff", path: "statistics/get"},
+		{data: "96a001010fffff", path: "statistics/get"},
+		{data: "96a0010110feff", path: "statistics/get"},
+		{data: "96a0010110ffff", path: "statistics/get"},
+		{data: "96a00101fffeff", path: "statistics/get"},
+		{data: "96a00101ffffff", path: "statistics/get"},
+		{data: "93000101", path: "catalog/get_follow"},
+		{data: "920101", path: "catalog/get_block"},
+		{data: "91a0", path: "lobby/get_vip_status"},
+		{data: "9105", path: "item/get_item"},
 	}
 }
