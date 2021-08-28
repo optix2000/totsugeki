@@ -250,7 +250,7 @@ func (s *StatsGetPrediction) AsyncGetStats() {
 	reqs := s.ExpectedStatsGetCalls()
 
 	queue := make(chan *StatsGetTask, len(reqs)+1)
-	for i, _ := range reqs {
+	for i := range reqs {
 		task := reqs[i]
 		id := s.BuildStatsReqBody(s.loginPrefix, task.data, s.apiVersion)
 		task.request = id
