@@ -262,7 +262,7 @@ func main() {
 		}()
 	}
 
-	if !*iKnowWhatImDoing && (*unsafeAsyncStatsSet || *unsafePredictStatsGet) {
+	if !*iKnowWhatImDoing && (*unsafeAsyncStatsSet || *unsafePredictStatsGet || *unsafeCacheNews || *unsafeNoNews) {
 		fmt.Println("WARNING: Unsafe feature used. Make sure you understand the implications: https://github.com/optix2000/totsugeki/blob/master/UNSAFE_SPEEDUPS.md")
 	}
 
