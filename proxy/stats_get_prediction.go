@@ -15,9 +15,15 @@ import (
 
 const StatsGetWorkers = 5
 
+type StatsGetDef struct {
+	request string
+	path    string
+}
+
 type StatsGetTask struct {
 	request  string
 	response chan *http.Response
+	path     string
 }
 
 type StatsGetPrediction struct {
@@ -63,9 +69,7 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		if s.predictionState != reset &&
-			path != "/api/sys/get_env" &&
-			path != "/api/user/login" &&
-			path != "/api/statistics/get" {
+			path == "/api/sys/get_news" {
 			if s.predictionState == sending_calls {
 				fmt.Println("Done looking up stats")
 			}
@@ -173,8 +177,8 @@ func (s *StatsGetPrediction) BuildStatsReqBody(login string, req string, apiVers
 		l=5
 
 		7. Divider2?
-		0396
-		l=2
+		03
+		l=1
 
 		8. Specific call
 		e.g. a007ffffffff , Confirm that this stays between users
@@ -192,7 +196,7 @@ func (s *StatsGetPrediction) BuildStatsReqBody(login string, req string, apiVers
 	sb.WriteString(login)
 	sb.WriteString("02a5")     // Divider
 	sb.WriteString(apiVersion) // 0.0.5
-	sb.WriteString("0396")     // Divider 2
+	sb.WriteString("03")       // Divider 2
 	sb.WriteString(req)
 	sb.WriteString("\x00") // End
 	return sb.String()
@@ -204,7 +208,7 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 		select {
 		case item := <-queue:
 			reqBytes := bytes.NewBuffer([]byte(item.request))
-			req, err := http.NewRequest("POST", s.GGStriveAPIURL+"statistics/get", reqBytes)
+			req, err := http.NewRequest("POST", s.GGStriveAPIURL+item.path, reqBytes)
 			if err != nil {
 				fmt.Print("Req error: ")
 				fmt.Println(err)
@@ -251,8 +255,8 @@ func (s *StatsGetPrediction) AsyncGetStats() {
 
 	queue := make(chan *StatsGetTask, len(reqs)+1)
 	for _, val := range reqs {
-		id := s.BuildStatsReqBody(s.loginPrefix, val, s.apiVersion)
-		task := &StatsGetTask{id, make(chan *http.Response)}
+		id := s.BuildStatsReqBody(s.loginPrefix, val.request, s.apiVersion)
+		task := &StatsGetTask{id, make(chan *http.Response), val.path}
 
 		s.statsGetTasks[id] = task
 		queue <- task
@@ -273,95 +277,104 @@ func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsG
 	}
 }
 
-func (s *StatsGetPrediction) ExpectedStatsGetCalls() []string {
-	return []string{
-		"a007ffffffff",
-		"a009ffffffff",
-		"a008ff00ffff",
-		"a008ff01ffff",
-		"a008ff02ffff",
-		"a008ff03ffff",
-		"a008ff04ffff",
-		"a008ff05ffff",
-		"a008ff06ffff",
-		"a008ff07ffff",
-		"a008ff08ffff",
-		"a008ff09ffff",
-		"a008ff0affff",
-		"a008ff0bffff",
-		"a008ff0cffff",
-		"a008ff0dffff",
-		"a008ff0effff",
-		"a008ff0fffff",
-		"a008ffffffff",
-		"a006ff00ffff",
-		"a006ff01ffff",
-		"a006ff02ffff",
-		"a006ff03ffff",
-		"a006ff04ffff",
-		"a006ff05ffff",
-		"a006ff06ffff",
-		"a006ff07ffff",
-		"a006ff08ffff",
-		"a006ff09ffff",
-		"a006ff0affff",
-		"a006ff0bffff",
-		"a006ff0cffff",
-		"a006ff0dffff",
-		"a006ff0effff",
-		"a006ff0fffff",
-		"a006ffffffff",
-		"a005ffffffff",
-		"a0020100ffff",
-		"a0020101ffff",
-		"a0020102ffff",
-		"a0020103ffff",
-		"a0020104ffff",
-		"a0020105ffff",
-		"a0020106ffff",
-		"a0020107ffff",
-		"a0020108ffff",
-		"a0020109ffff",
-		"a002010affff",
-		"a002010bffff",
-		"a002010cffff",
-		"a002010dffff",
-		"a002010effff",
-		"a002010fffff",
-		"a00201ffffff",
-		"a0010100feff",
-		"a0010100ffff",
-		"a0010101feff",
-		"a0010101ffff",
-		"a0010102feff",
-		"a0010102ffff",
-		"a0010103feff",
-		"a0010103ffff",
-		"a0010104feff",
-		"a0010104ffff",
-		"a0010105feff",
-		"a0010105ffff",
-		"a0010106feff",
-		"a0010106ffff",
-		"a0010107feff",
-		"a0010107ffff",
-		"a0010108feff",
-		"a0010108ffff",
-		"a0010109feff",
-		"a0010109ffff",
-		"a001010afeff",
-		"a001010affff",
-		"a001010bfeff",
-		"a001010bffff",
-		"a001010cfeff",
-		"a001010cffff",
-		"a001010dfeff",
-		"a001010dffff",
-		"a001010efeff",
-		"a001010effff",
-		"a001010ffeff",
-		"a001010fffff",
-		"a00101fffeff",
-		"a00101ffffff",
+func (s *StatsGetPrediction) ExpectedStatsGetCalls() []StatsGetDef {
+	return []StatsGetDef{
+		{"96a007ffffffff", "statistics/get"},
+		{"96a009ffffffff", "statistics/get"},
+		{"96a008ff00ffff", "statistics/get"},
+		{"96a008ff01ffff", "statistics/get"},
+		{"96a008ff02ffff", "statistics/get"},
+		{"96a008ff03ffff", "statistics/get"},
+		{"96a008ff04ffff", "statistics/get"},
+		{"96a008ff05ffff", "statistics/get"},
+		{"96a008ff06ffff", "statistics/get"},
+		{"96a008ff07ffff", "statistics/get"},
+		{"96a008ff08ffff", "statistics/get"},
+		{"96a008ff09ffff", "statistics/get"},
+		{"96a008ff0affff", "statistics/get"},
+		{"96a008ff0bffff", "statistics/get"},
+		{"96a008ff0cffff", "statistics/get"},
+		{"96a008ff0dffff", "statistics/get"},
+		{"96a008ff0effff", "statistics/get"},
+		{"96a008ff0fffff", "statistics/get"},
+		{"96a008ff10ffff", "statistics/get"},
+		{"96a008ffffffff", "statistics/get"},
+		{"96a006ff00ffff", "statistics/get"},
+		{"96a006ff01ffff", "statistics/get"},
+		{"96a006ff02ffff", "statistics/get"},
+		{"96a006ff03ffff", "statistics/get"},
+		{"96a006ff04ffff", "statistics/get"},
+		{"96a006ff05ffff", "statistics/get"},
+		{"96a006ff06ffff", "statistics/get"},
+		{"96a006ff07ffff", "statistics/get"},
+		{"96a006ff08ffff", "statistics/get"},
+		{"96a006ff09ffff", "statistics/get"},
+		{"96a006ff0affff", "statistics/get"},
+		{"96a006ff0bffff", "statistics/get"},
+		{"96a006ff0cffff", "statistics/get"},
+		{"96a006ff0dffff", "statistics/get"},
+		{"96a006ff0effff", "statistics/get"},
+		{"96a006ff0fffff", "statistics/get"},
+		{"96a006ff10ffff", "statistics/get"},
+		{"96a006ffffffff", "statistics/get"},
+		{"96a005ffffffff", "statistics/get"},
+		{"96a0020100ffff", "statistics/get"},
+		{"96a0020101ffff", "statistics/get"},
+		{"96a0020102ffff", "statistics/get"},
+		{"96a0020103ffff", "statistics/get"},
+		{"96a0020104ffff", "statistics/get"},
+		{"96a0020105ffff", "statistics/get"},
+		{"96a0020106ffff", "statistics/get"},
+		{"96a0020107ffff", "statistics/get"},
+		{"96a0020108ffff", "statistics/get"},
+		{"96a0020109ffff", "statistics/get"},
+		{"96a002010affff", "statistics/get"},
+		{"96a002010bffff", "statistics/get"},
+		{"96a002010cffff", "statistics/get"},
+		{"96a002010dffff", "statistics/get"},
+		{"96a002010effff", "statistics/get"},
+		{"96a002010fffff", "statistics/get"},
+		{"96a0020110ffff", "statistics/get"},
+		{"96a00201ffffff", "statistics/get"},
+		{"96a0010100feff", "statistics/get"},
+		{"96a0010100ffff", "statistics/get"},
+		{"96a0010101feff", "statistics/get"},
+		{"96a0010101ffff", "statistics/get"},
+		{"96a0010102feff", "statistics/get"},
+		{"96a0010102ffff", "statistics/get"},
+		{"96a0010103feff", "statistics/get"},
+		{"96a0010103ffff", "statistics/get"},
+		{"96a0010104feff", "statistics/get"},
+		{"96a0010104ffff", "statistics/get"},
+		{"96a0010105feff", "statistics/get"},
+		{"96a0010105ffff", "statistics/get"},
+		{"96a0010106feff", "statistics/get"},
+		{"96a0010106ffff", "statistics/get"},
+		{"96a0010107feff", "statistics/get"},
+		{"96a0010107ffff", "statistics/get"},
+		{"96a0010108feff", "statistics/get"},
+		{"96a0010108ffff", "statistics/get"},
+		{"96a0010109feff", "statistics/get"},
+		{"96a0010109ffff", "statistics/get"},
+		{"96a001010afeff", "statistics/get"},
+		{"96a001010affff", "statistics/get"},
+		{"96a001010bfeff", "statistics/get"},
+		{"96a001010bffff", "statistics/get"},
+		{"96a001010cfeff", "statistics/get"},
+		{"96a001010cffff", "statistics/get"},
+		{"96a001010dfeff", "statistics/get"},
+		{"96a001010dffff", "statistics/get"},
+		{"96a001010efeff", "statistics/get"},
+		{"96a001010effff", "statistics/get"},
+		{"96a001010ffeff", "statistics/get"},
+		{"96a001010fffff", "statistics/get"},
+		{"96a0010110feff", "statistics/get"},
+		{"96a0010110ffff", "statistics/get"},
+		{"96a00101fffeff", "statistics/get"},
+		{"96a00101ffffff", "statistics/get"},
+		{"93000101", "catalog/get_follow"},
+		{"920101", "catalog/get_block"},
+		{"91a0", "lobby/get_vip_status"},
+		{"9105", "item/get_item"},
 	}
 }
