@@ -111,11 +111,11 @@ func watchGGST(noClose bool, ctx context.Context) {
 				}
 			}
 			if pid == patchedPid {
-				cancelableSleep(ctx, 10*time.Second)
+				cancelableSleep(ctx, 5*time.Second)
 				continue
 			}
 
-			cancelableSleep(ctx, 100*time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
+			cancelableSleep(ctx, 500*time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
 			offset, err := patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
 			if err != nil {
 				if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
