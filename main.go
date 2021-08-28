@@ -277,5 +277,3 @@ func main() {
 
 	wg.Wait()
 }
-
-// TODO: Caching for most APIs (may need API caching/parsing/reversing)
