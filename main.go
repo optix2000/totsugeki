@@ -164,12 +164,14 @@ func main() {
 	if err == nil {
 		procSetConsoleTitle.Call(uintptr(unsafe.Pointer(title)))
 	}
+
+	// Disable QuickEdit mode
 	handle, err := windows.GetStdHandle(windows.STD_INPUT_HANDLE)
 	if err == nil {
 		var mode uint32
 		err = windows.GetConsoleMode(handle, &mode)
 		if err == nil {
-			windows.SetConsoleMode(handle, (mode&^windows.ENABLE_QUICK_EDIT_MODE)|windows.ENABLE_EXTENDED_FLAGS) // Disable QuickEdit mode
+			windows.SetConsoleMode(handle, (mode&^windows.ENABLE_QUICK_EDIT_MODE)|windows.ENABLE_EXTENDED_FLAGS) // https://docs.microsoft.com/en-us/windows/console/setconsolemode
 		}
 		windows.CloseHandle(handle)
 	}
@@ -190,6 +192,7 @@ func main() {
 		*unsafeNoNews = true
 	}
 
+	// Drop process priority
 	handle = windows.CurrentProcess()
 	err = windows.SetPriorityClass(handle, windows.BELOW_NORMAL_PRIORITY_CLASS)
 	if err != nil {
@@ -197,6 +200,7 @@ func main() {
 	}
 	windows.CloseHandle(handle)
 
+	// Launch GGST if it's not already running
 	if !*noLaunch {
 		_, err := patcher.GetProc(GGStriveExe)
 		if err != nil {
@@ -213,10 +217,12 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
+
+	ctx, cancel := context.WithCancel(context.Background()) // Context for graceful shutdown
 	defer cancel()
 	sig = make(chan os.Signal, 1)
 
+	// Watch for signal to do graceful shutdown
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -226,6 +232,7 @@ func main() {
 		server.Shutdown()
 	}()
 
+	// Start Patcher
 	if !*noPatch {
 		wg.Add(1)
 		go func() {
