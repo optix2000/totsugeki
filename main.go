@@ -127,7 +127,7 @@ func watchGGST(noClose bool, ctx context.Context) {
 					messageBox("Could not patch GGST. Steam/GGST may be running as Administrator. Try re-running Totsugeki as Administrator.")
 					os.Exit(1)
 				} else if errors.Is(err, patcher.ErrOffsetMismatch) {
-					fmt.Printf("WARNING: Offset found at unknown location. This version of Totsugeki has not been tested with this version of GGST and may cause issues.")
+					fmt.Printf("WARNING: Offset found at unknown location. This version of Totsugeki has not been tested with this version of GGST and may cause issues.\n")
 				} else {
 					fmt.Printf("Error at offset 0x%x: %v", offset, err)
 					panic(err)
