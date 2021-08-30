@@ -2,21 +2,22 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
-	"regexp"
 	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
 	"unsafe"
 
+	"github.com/inconshreveable/go-update"
 	"github.com/optix2000/totsugeki/patcher"
 	"github.com/optix2000/totsugeki/proxy"
 
@@ -36,8 +37,12 @@ const APIOffsetAddr uintptr = 0x33EE420 // 1.09
 const GGStriveAPIURL = "https://ggst-game.guiltygear.com/api/"
 const PatchedAPIURL = "http://127.0.0.1:21611/api/"
 
-const GithubDownloadLink = "https://github.com/optix2000/totsugeki/releases/latest/download/totsugeki.exe"
-const GithubReleasesLink = "https://github.com/optix2000/totsugeki/releases/latest"
+const GithubDownloadURL = "https://github.com/optix2000/totsugeki/releases/latest/download/"
+const GithubReleasesURL = "https://api.github.com/repos/optix2000/totsugeki/releases/latest"
+
+const UpdateTimeout = 5 * time.Second
+const UpdateName = "totsugeki.exe"
+const UpdateNameUngaBunga = "totsugeki-unga-bunga.exe"
 
 const totsugeki = " _____       _                             _     _ \n" +
 	"|_   _|___  | |_  ___  _   _   __ _   ___ | | __(_)\n" +
@@ -51,6 +56,10 @@ var sig chan os.Signal
 
 var modKernel32 *windows.LazyDLL = windows.NewLazySystemDLL("kernel32.dll")
 var procSetConsoleTitle *windows.LazyProc = modKernel32.NewProc("SetConsoleTitleW")
+
+type Release = struct {
+	TagName string `json:"tag_name"`
+}
 
 func panicBox(v interface{}) {
 	const header = `Totsugeki has encountered a fatal error.
@@ -148,62 +157,67 @@ func watchGGST(noClose bool, ctx context.Context) {
 	}
 }
 
-func downloadFile(filepath string, url string) error {
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	out, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
-}
-
-func selfDelete() {
-	var sI syscall.StartupInfo
-	var pI syscall.ProcessInformation
-	exePath, err := os.Executable()
-	if err != nil {
-		panic(err)
-	}
-	argv, err := syscall.UTF16PtrFromString(os.Getenv("windir") + "\\system32\\cmd.exe /C del " + exePath)
-	if err != nil {
-		panic(err)
-	}
-	err = syscall.CreateProcess(nil, argv, nil, nil, true, 0, nil, nil, &sI, &pI)
-	if err != nil {
-		panic(err)
-	}
-}
-
 func autoUpdate() {
-	resp, err := http.Get(GithubReleasesLink)
-	if err != nil {
-		panic(err)
+
+	url := GithubDownloadURL
+	if UngaBungaMode == "" {
+		url = GithubDownloadURL + UpdateName
+	} else {
+		url = GithubDownloadURL + UpdateNameUngaBunga
 	}
 
-	url := resp.Request.URL.String()
-	pattern := regexp.MustCompile(`v\d+.\d+.\d+`)
-	matches := pattern.FindStringSubmatch(url)
+	client := http.Client{
+		Timeout: UpdateTimeout,
+	}
+	resp, err := client.Get(GithubReleasesURL)
 
-	if len(matches) < 1 {
+	if err != nil {
+		fmt.Println("Couldn't get latest release version number")
 		return
 	}
 
-	version := matches[0]
-	if version != Version {
-		fmt.Println("New version released, downloading")
-		err := downloadFile("totsugeki_"+version+".exe", GithubDownloadLink)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Couldn't read latest release version")
+		return
+	}
+
+	release := &Release{}
+	json.Unmarshal(body, release)
+
+	if release.TagName != Version && Version != "" {
+		exePath, err := os.Executable()
 		if err != nil {
-			panic(err)
+			fmt.Println("Failed to get executable path")
+			return
 		}
-		selfDelete()
+
+		fmt.Println("New version released, downloading...")
+		resp, err := http.Get(url)
+		if err != nil {
+			fmt.Println("Failed to download new version")
+			return
+		}
+		defer resp.Body.Close()
+
+		err = update.Apply(resp.Body, update.Options{})
+
+		if err != nil {
+			fmt.Println("Failed to update totsugeki", err)
+			return
+		}
+
+		command := []string{"/C", "start", exePath}
+		args := append(command, os.Args[1:]...)
+
+		cmd := exec.Command("cmd", args...)
+		err = cmd.Start()
+
+		if err != nil {
+			fmt.Println("could not start new totsugeki version")
+			return
+		}
+
 		os.Exit(0)
 	}
 }
