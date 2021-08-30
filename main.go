@@ -5,10 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"runtime/debug"
 	"sync"
 	"syscall"
@@ -33,6 +35,9 @@ const APIOffsetAddr uintptr = 0x33EE420 // 1.09
 
 const GGStriveAPIURL = "https://ggst-game.guiltygear.com/api/"
 const PatchedAPIURL = "http://127.0.0.1:21611/api/"
+
+const GithubDownloadLink = "https://github.com/optix2000/totsugeki/releases/latest/download/totsugeki.exe"
+const GithubReleasesLink = "https://github.com/optix2000/totsugeki/releases/latest"
 
 const totsugeki = " _____       _                             _     _ \n" +
 	"|_   _|___  | |_  ___  _   _   __ _   ___ | | __(_)\n" +
@@ -143,11 +148,72 @@ func watchGGST(noClose bool, ctx context.Context) {
 	}
 }
 
+func downloadFile(filepath string, url string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
+}
+
+func selfDelete() {
+	var sI syscall.StartupInfo
+	var pI syscall.ProcessInformation
+	exePath, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	argv, err := syscall.UTF16PtrFromString(os.Getenv("windir") + "\\system32\\cmd.exe /C del " + exePath)
+	if err != nil {
+		panic(err)
+	}
+	err = syscall.CreateProcess(nil, argv, nil, nil, true, 0, nil, nil, &sI, &pI)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func autoUpdate() {
+	resp, err := http.Get(GithubReleasesLink)
+	if err != nil {
+		panic(err)
+	}
+
+	url := resp.Request.URL.String()
+	pattern := regexp.MustCompile(`v\d+.\d+.\d+`)
+	matches := pattern.FindStringSubmatch(url)
+
+	if len(matches) < 1 {
+		return
+	}
+
+	version := matches[0]
+	if version != Version {
+		fmt.Println("New version released, downloading")
+		err := downloadFile("totsugeki_"+version+".exe", GithubDownloadLink)
+		if err != nil {
+			panic(err)
+		}
+		selfDelete()
+		os.Exit(0)
+	}
+}
+
 func main() {
 	var noProxy = flag.Bool("no-proxy", false, "Don't start local proxy. Useful if you want to run your own proxy.")
 	var noLaunch = flag.Bool("no-launch", false, "Don't launch GGST. Useful if you want to launch GGST through other means.")
 	var noPatch = flag.Bool("no-patch", false, "Don't patch GGST with proxy address.")
 	var noClose = flag.Bool("no-close", false, "Don't automatically close totsugeki alongside GGST.")
+	var noUpdate = flag.Bool("no-update", false, "Don't check for totsugeki updates.")
 	var unsafeAsyncStatsSet = flag.Bool("unsafe-async-stats-set", false, "UNSAFE: Asynchronously upload stats (R-Code) in the background.")
 	var unsafePredictStatsGet = flag.Bool("unsafe-predict-stats-get", false, "UNSAFE: Asynchronously precache expected statistics/get calls.")
 	var unsafeCacheNews = flag.Bool("unsafe-cache-news", false, "UNSAFE: Cache first news call and return cached version on subsequent calls.")
@@ -188,6 +254,10 @@ func main() {
 			panicBox(r)
 		}
 	}()
+
+	if !*noUpdate {
+		autoUpdate()
+	}
 
 	if *ungaBunga { // Mash only
 		*unsafeAsyncStatsSet = true
