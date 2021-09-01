@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime/debug"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -193,12 +192,12 @@ func autoUpdate() error {
 		return errors.New("could not read JSON response with version number")
 	}
 
-	currentVersion, err := semver.Make(strings.Trim(Version, "v"))
+	currentVersion, err := semver.ParseTolerant(Version)
 	if err != nil {
 		return errors.New("could not parse current version number")
 	}
 
-	latestVersion, err := semver.Make(strings.Trim(release.TagName, "v"))
+	latestVersion, err := semver.ParseTolerant(release.TagName)
 	if err != nil {
 		return errors.New("could not parse latest version number")
 	}
