@@ -130,29 +130,37 @@ func watchGGST(noClose bool, ctx context.Context) {
 				cancelableSleep(ctx, 5*time.Second)
 				continue
 			}
-
-			cancelableSleep(ctx, 500*time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
-			offset, err := patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
-			if err != nil {
-				if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
-					fmt.Printf("GGST with PID %d is already patched at offset 0x%x.\n", pid, offset)
+			var retry int
+			for retry = 0; retry < 3; retry++ {
+				cancelableSleep(ctx, 1000*time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
+				var offset uintptr
+				offset, err = patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
+				if err != nil {
+					if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
+						fmt.Printf("GGST with PID %d is already patched at offset 0x%x.\n", pid, offset)
+						if !noClose {
+							close = true
+						}
+						break
+					} else if errors.Unwrap(err) == syscall.Errno(windows.ERROR_ACCESS_DENIED) {
+						messageBox("Could not patch GGST. Steam/GGST may be running as Administrator. Try re-running Totsugeki as Administrator.")
+						os.Exit(1)
+					} else if errors.Is(err, patcher.ErrOffsetMismatch) {
+						fmt.Printf("WARNING: Offset found at unknown location. This version of Totsugeki has not been tested with this version of GGST and may cause issues.\n")
+					} else {
+						fmt.Printf("Error at offset 0x%x: %v", offset, err)
+						continue
+					}
+				} else {
+					fmt.Printf("Patched GGST with PID %d at offset 0x%x.\n", pid, offset)
 					if !noClose {
 						close = true
 					}
-				} else if errors.Unwrap(err) == syscall.Errno(windows.ERROR_ACCESS_DENIED) {
-					messageBox("Could not patch GGST. Steam/GGST may be running as Administrator. Try re-running Totsugeki as Administrator.")
-					os.Exit(1)
-				} else if errors.Is(err, patcher.ErrOffsetMismatch) {
-					fmt.Printf("WARNING: Offset found at unknown location. This version of Totsugeki has not been tested with this version of GGST and may cause issues.\n")
-				} else {
-					fmt.Printf("Error at offset 0x%x: %v", offset, err)
-					panic(err)
+					break
 				}
-			} else {
-				fmt.Printf("Patched GGST with PID %d at offset 0x%x.\n", pid, offset)
-				if !noClose {
-					close = true
-				}
+			}
+			if retry >= 3 {
+				panic(err)
 			}
 			patchedPid = pid
 		}
