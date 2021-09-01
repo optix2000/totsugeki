@@ -148,7 +148,7 @@ func watchGGST(noClose bool, ctx context.Context) {
 					} else if errors.Is(err, patcher.ErrOffsetMismatch) {
 						fmt.Printf("WARNING: Offset found at unknown location. This version of Totsugeki has not been tested with this version of GGST and may cause issues.\n")
 					} else {
-						fmt.Printf("Error at offset 0x%x: %v", offset, err)
+						fmt.Printf("Error at offset 0x%x: %v\n", offset, err)
 						continue
 					}
 				} else {
@@ -255,7 +255,7 @@ func main() {
 	flag.Parse()
 
 	if *ver {
-		fmt.Printf("totsugeki %v", Version)
+		fmt.Printf("totsugeki %v\n", Version)
 		os.Exit(0)
 	}
 
