@@ -291,7 +291,7 @@ func main() {
 	if !*noUpdate && Version != "(unknown version)" {
 		err := autoUpdate()
 		if err != nil {
-			fmt.Printf("Failed to update totsugeki: \n%v.\n\n", err.Error())
+			fmt.Printf("Failed to update totsugeki: %v.\n", err.Error())
 		}
 	}
 
