@@ -10,7 +10,7 @@ https://user-images.githubusercontent.com/1121068/128973383-77b79b44-1998-48c6-a
 
 ## Quickstart
 
-1. [Download](https://github.com/optix2000/totsugeki/releases/latest/download/totsugeki.exe)
+1. [Download](https://github.com/optix2000/totsugeki/releases/latest/download/totsugeki.exe) ([All Downloads](https://github.com/optix2000/totsugeki/releases/latest))
 2. Run `totsugeki.exe`
 3. 🐬
 
