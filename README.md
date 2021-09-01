@@ -6,6 +6,8 @@ Totsugeki lets you totsugeki past the Strive connection screen.
 
 https://user-images.githubusercontent.com/1121068/128973383-77b79b44-1998-48c6-aa67-e3014cf8f779.mp4
 
+[Better comparison (YouTube)](https://www.youtube.com/watch?v=EsVe77QBW2Y)
+
 ## Quickstart
 
 1. [Download](https://github.com/optix2000/totsugeki/releases/latest/download/totsugeki.exe)
@@ -16,7 +18,7 @@ Removing Totsugeki is as simple as deleting the executable and launching the gam
 
 ## Features
 
-- 3-4x Speedup compared to vanilla Strive. \*6x+ speedup with Unga-Bunga enabled.
+- 3-4x Speedup compared to vanilla Strive. 6x+ speedup with \*Unga-Bunga enabled.
 - No installation or messing with system files. Just download and run.
 - No administrator permissions needed.
 - \*100% transparent: Sends data bit-for-bit the same as vanilla Strive. No stat or lobby inconsistencies.
@@ -62,7 +64,7 @@ See `-unga-bunga` and [UNSAFE_SPEEDUPS.md](https://github.com/optix2000/totsugek
 
 ## Building
 
-Tested with Golang 1.16, but probably will compile with Golang 1.13+.
+Tested with Golang 1.17, but probably will compile with Golang 1.13+.
 
 ### Installing from source
 
@@ -87,4 +89,4 @@ With Totsugeki, this is brought down to a mere 38 seconds.
 
 This has added bonus of reducing GGST server load, as TLS negotiation is one of the most CPU intensive tasks today.
 
-Thanks to u/TarballX for doing the initial research on why GGST takes so long to connect.
+Thanks to [u/TarballX](https://www.reddit.com/user/TarballX) for doing the [initial research](https://www.reddit.com/r/Guiltygear/comments/oaqwo5/analysis_of_network_traffic_at_game_startup/) on why GGST takes so long to connect.
