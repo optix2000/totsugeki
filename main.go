@@ -2,19 +2,24 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 	"unsafe"
 
+	"github.com/blang/semver/v4"
+	"github.com/inconshreveable/go-update"
 	"github.com/optix2000/totsugeki/patcher"
 	"github.com/optix2000/totsugeki/proxy"
 
@@ -34,6 +39,13 @@ const APIOffsetAddr uintptr = 0x33EE420 // 1.09
 const GGStriveAPIURL = "https://ggst-game.guiltygear.com/api/"
 const PatchedAPIURL = "http://127.0.0.1:21611/api/"
 
+const GithubDownloadURL = "https://github.com/optix2000/totsugeki/releases/latest/download/"
+const GithubReleasesURL = "https://api.github.com/repos/optix2000/totsugeki/releases/latest"
+
+const UpdateTimeout = 30 * time.Second
+const UpdateName = "totsugeki.exe"
+const UpdateNameUngaBunga = "totsugeki-unga-bunga.exe"
+
 const totsugeki = " _____       _                             _     _ \n" +
 	"|_   _|___  | |_  ___  _   _   __ _   ___ | | __(_)\n" +
 	"  | | / _ \\ | __|/ __|| | | | / _` | / _ \\| |/ /| |\n" +
@@ -46,6 +58,10 @@ var sig chan os.Signal
 
 var modKernel32 *windows.LazyDLL = windows.NewLazySystemDLL("kernel32.dll")
 var procSetConsoleTitle *windows.LazyProc = modKernel32.NewProc("SetConsoleTitleW")
+
+type Release = struct {
+	TagName string `json:"tag_name"`
+}
 
 func panicBox(v interface{}) {
 	const header = `Totsugeki has encountered a fatal error.
@@ -143,11 +159,83 @@ func watchGGST(noClose bool, ctx context.Context) {
 	}
 }
 
+func autoUpdate() error {
+	url := GithubDownloadURL + UpdateName
+	if UngaBungaMode != "" {
+		url = GithubDownloadURL + UpdateNameUngaBunga
+	}
+
+	client := http.Client{
+		Timeout: UpdateTimeout,
+	}
+	resp, err := client.Get(GithubReleasesURL)
+
+	if err != nil {
+		return errors.New("could not get latest release version number")
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return errors.New("could not read latest release version")
+	}
+
+	release := &Release{}
+	err = json.Unmarshal(body, release)
+	if err != nil {
+		return errors.New("could not read JSON response with version number")
+	}
+
+	currentVersion, err := semver.Make(strings.Trim(Version, "v"))
+	if err != nil {
+		return errors.New("could not parse current version number")
+	}
+
+	latestVersion, err := semver.Make(strings.Trim(release.TagName, "v"))
+	if err != nil {
+		return errors.New("could not parse latest version number")
+	}
+
+	if currentVersion.Compare(latestVersion) == -1 {
+		exePath, err := os.Executable()
+		if err != nil {
+			return errors.New("could not get executable path")
+		}
+
+		fmt.Println("New version released, downloading...")
+		resp, err := http.Get(url)
+		if err != nil {
+			return errors.New("could not download new version")
+		}
+		defer resp.Body.Close()
+
+		err = update.Apply(resp.Body, update.Options{})
+
+		if err != nil {
+			return errors.New("could not update totsugeki")
+		}
+
+		command := []string{"/C", "start", exePath}
+		args := append(command, os.Args[1:]...)
+
+		cmd := exec.Command("cmd", args...)
+		err = cmd.Start()
+
+		if err != nil {
+			return errors.New("could not start new totsugeki version")
+		}
+
+		os.Exit(0)
+	}
+
+	return nil
+}
+
 func main() {
 	var noProxy = flag.Bool("no-proxy", false, "Don't start local proxy. Useful if you want to run your own proxy.")
 	var noLaunch = flag.Bool("no-launch", false, "Don't launch GGST. Useful if you want to launch GGST through other means.")
 	var noPatch = flag.Bool("no-patch", false, "Don't patch GGST with proxy address.")
 	var noClose = flag.Bool("no-close", false, "Don't automatically close totsugeki alongside GGST.")
+	var noUpdate = flag.Bool("no-update", false, "Don't check for totsugeki updates.")
 	var unsafeAsyncStatsSet = flag.Bool("unsafe-async-stats-set", false, "UNSAFE: Asynchronously upload stats (R-Code) in the background.")
 	var unsafePredictStatsGet = flag.Bool("unsafe-predict-stats-get", false, "UNSAFE: Asynchronously precache expected statistics/get calls.")
 	var unsafeCacheNews = flag.Bool("unsafe-cache-news", false, "UNSAFE: Cache first news call and return cached version on subsequent calls.")
@@ -188,6 +276,13 @@ func main() {
 			panicBox(r)
 		}
 	}()
+
+	if !*noUpdate && Version != "(unknown version)" {
+		err := autoUpdate()
+		if err != nil {
+			fmt.Printf("Failed to update totsugeki: \n%v.\n\n", err.Error())
+		}
+	}
 
 	if *ungaBunga { // Mash only
 		*unsafeAsyncStatsSet = true

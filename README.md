@@ -42,6 +42,8 @@ Valid options:
         Don't start local proxy. Useful if you want to run your own proxy.
   -no-close
         Don't automatically close totsugeki alongside GGST. (v1.0.0+)
+  -no-update
+        Don't automatically update totsugeki if there's a new version. (v1.3.0+)
   -unga-bunga
         Enable all unsafe speedups for maximum speed. Please read https://github.com/optix2000/totsugeki/blob/dev/UNSAFE_SPEEDUPS.md (v1.2.0+)
   -version
