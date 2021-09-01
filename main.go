@@ -12,11 +12,13 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 	"unsafe"
 
+	"github.com/blang/semver/v4"
 	"github.com/inconshreveable/go-update"
 	"github.com/optix2000/totsugeki/patcher"
 	"github.com/optix2000/totsugeki/proxy"
@@ -40,7 +42,7 @@ const PatchedAPIURL = "http://127.0.0.1:21611/api/"
 const GithubDownloadURL = "https://github.com/optix2000/totsugeki/releases/latest/download/"
 const GithubReleasesURL = "https://api.github.com/repos/optix2000/totsugeki/releases/latest"
 
-const UpdateTimeout = 5 * time.Second
+const UpdateTimeout = 30 * time.Second
 const UpdateName = "totsugeki.exe"
 const UpdateNameUngaBunga = "totsugeki-unga-bunga.exe"
 
@@ -157,12 +159,9 @@ func watchGGST(noClose bool, ctx context.Context) {
 	}
 }
 
-func autoUpdate() {
-
-	url := GithubDownloadURL
-	if UngaBungaMode == "" {
-		url = GithubDownloadURL + UpdateName
-	} else {
+func autoUpdate() error {
+	url := GithubDownloadURL + UpdateName
+	if UngaBungaMode != "" {
 		url = GithubDownloadURL + UpdateNameUngaBunga
 	}
 
@@ -172,39 +171,47 @@ func autoUpdate() {
 	resp, err := client.Get(GithubReleasesURL)
 
 	if err != nil {
-		fmt.Println("Couldn't get latest release version number")
-		return
+		return errors.New("could not get latest release version number")
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("Couldn't read latest release version")
-		return
+		return errors.New("could not read latest release version")
 	}
 
 	release := &Release{}
-	json.Unmarshal(body, release)
+	err = json.Unmarshal(body, release)
+	if err != nil {
+		return errors.New("could not read JSON response with version number")
+	}
 
-	if release.TagName != Version && Version != "" {
+	currentVersion, err := semver.Make(strings.Trim(Version, "v"))
+	if err != nil {
+		return errors.New("could not parse current version number")
+	}
+
+	latestVersion, err := semver.Make(strings.Trim(release.TagName, "v"))
+	if err != nil {
+		return errors.New("could not parse latest version number")
+	}
+
+	if currentVersion.Compare(latestVersion) == -1 {
 		exePath, err := os.Executable()
 		if err != nil {
-			fmt.Println("Failed to get executable path")
-			return
+			return errors.New("could not get executable path")
 		}
 
 		fmt.Println("New version released, downloading...")
 		resp, err := http.Get(url)
 		if err != nil {
-			fmt.Println("Failed to download new version")
-			return
+			return errors.New("could not download new version")
 		}
 		defer resp.Body.Close()
 
 		err = update.Apply(resp.Body, update.Options{})
 
 		if err != nil {
-			fmt.Println("Failed to update totsugeki", err)
-			return
+			return errors.New("could not update totsugeki")
 		}
 
 		command := []string{"/C", "start", exePath}
@@ -214,12 +221,13 @@ func autoUpdate() {
 		err = cmd.Start()
 
 		if err != nil {
-			fmt.Println("could not start new totsugeki version")
-			return
+			return errors.New("could not start new totsugeki version")
 		}
 
 		os.Exit(0)
 	}
+
+	return nil
 }
 
 func main() {
@@ -269,8 +277,11 @@ func main() {
 		}
 	}()
 
-	if !*noUpdate {
-		autoUpdate()
+	if !*noUpdate && Version != "(unknown version)" {
+		err := autoUpdate()
+		if err != nil {
+			fmt.Printf("Failed to update totsugeki: \n%v.\n\n", err.Error())
+		}
 	}
 
 	if *ungaBunga { // Mash only

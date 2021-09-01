@@ -3,6 +3,7 @@ module github.com/optix2000/totsugeki
 go 1.16
 
 require (
+	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/go-chi/chi/v5 v5.0.3
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf // indirect
 	github.com/tc-hib/go-winres v0.2.3
