@@ -202,7 +202,11 @@ func autoUpdate() error {
 		return errors.New("could not parse latest version number")
 	}
 
-	if currentVersion.Compare(latestVersion) == -1 {
+	if currentVersion.LT(latestVersion) { // Only update if newer and we are running a stable version.
+		if len(currentVersion.Pre) != 0 {
+			fmt.Printf("New version v%v available, but cannot update from test/pre-release version v%v.", latestVersion, currentVersion)
+			return nil
+		}
 		exePath, err := os.Executable()
 		if err != nil {
 			return errors.New("could not get executable path")
