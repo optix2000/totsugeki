@@ -204,8 +204,14 @@ func autoUpdate() error {
 
 	if currentVersion.LT(latestVersion) { // Only update if newer and we are running a stable version.
 		if len(currentVersion.Pre) != 0 {
-			fmt.Printf("New version v%v available, but cannot update from test/pre-release version v%v.", latestVersion, currentVersion)
-			return nil
+			if currentVersion.Pre[0].String() == "unga-bunga" {
+				if currentVersion.FinalizeVersion() == latestVersion.FinalizeVersion() { // Versions are actually the same
+					return nil
+				}
+			} else {
+				fmt.Printf("New version v%v available, but cannot update from test/pre-release version v%v.\n", latestVersion, currentVersion)
+				return nil
+			}
 		}
 		exePath, err := os.Executable()
 		if err != nil {
