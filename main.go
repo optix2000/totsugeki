@@ -231,11 +231,11 @@ func autoUpdate() error {
 			return errors.New("could not update totsugeki")
 		}
 
-		command := []string{"/C", "start", exePath}
-		args := append(command, os.Args[1:]...)
-
-		cmd := exec.Command("cmd", args...)
-		err = cmd.Start()
+		command := exec.Command(exePath, os.Args[1:]...)
+		command.Stdout = os.Stdout
+		command.Stderr = os.Stderr
+		command.Stdin = os.Stdin
+		err = command.Start()
 
 		if err != nil {
 			return errors.New("could not start new totsugeki version")
