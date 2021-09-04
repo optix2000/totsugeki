@@ -39,6 +39,7 @@ const (
 	get_env_called
 	login_parsed
 	sending_calls
+	finished
 )
 
 type CachingResponseWriter struct {
@@ -64,15 +65,14 @@ func (rw *CachingResponseWriter) Write(data []byte) (int, error) {
 func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if s.predictionState != reset &&
-			path == "/api/sys/get_news" {
+		if s.predictionState != finished && path == "/api/sys/get_news" {
 			if s.predictionState == sending_calls {
 				fmt.Println("Done looking up stats")
 			}
-			s.predictionState = reset
+			s.predictionState = finished
 		}
 
-		if path == "/api/sys/get_env" || path == "/api/user/login" {
+		if (path == "/api/sys/get_env" || path == "/api/user/login") && s.predictionState != finished {
 			wrappedWriter := CachingResponseWriter{w: w}
 			next.ServeHTTP(&wrappedWriter, r)
 
