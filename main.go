@@ -231,7 +231,15 @@ func autoUpdate() error {
 			return errors.New("could not update totsugeki")
 		}
 
-		command := exec.Command(exePath, os.Args[1:]...)
+		command := exec.Command("cmd", "/c", "cls") // Clear screen
+		command.Stdout = os.Stdout
+		err = command.Start()
+
+		if err != nil {
+			return errors.New("could not clear the screen")
+		}
+
+		command = exec.Command(exePath, os.Args[1:]...)
 		command.Stdout = os.Stdout
 		command.Stderr = os.Stderr
 		command.Stdin = os.Stdin
