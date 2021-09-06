@@ -108,6 +108,18 @@ func clearScreen() {
 	}
 }
 
+func disableQuickEdit() {
+	handle, err := windows.GetStdHandle(windows.STD_INPUT_HANDLE)
+	if err == nil {
+		defer windows.CloseHandle(handle)
+		var mode uint32
+		if windows.GetConsoleMode(handle, &mode) == nil {
+			windows.SetConsoleMode(handle, (mode&^windows.ENABLE_QUICK_EDIT_MODE)|windows.ENABLE_EXTENDED_FLAGS) // https://docs.microsoft.com/en-us/windows/console/setconsolemode
+		}
+
+	}
+}
+
 // Patch GGST as it starts
 func watchGGST(noClose bool, ctx context.Context) {
 	var patchedPid uint32 = 1
@@ -287,16 +299,8 @@ func main() {
 		procSetConsoleTitle.Call(uintptr(unsafe.Pointer(title)))
 	}
 
-	// Disable QuickEdit mode
-	handle, err := windows.GetStdHandle(windows.STD_INPUT_HANDLE)
-	if err == nil {
-		var mode uint32
-		err = windows.GetConsoleMode(handle, &mode)
-		if err == nil {
-			windows.SetConsoleMode(handle, (mode&^windows.ENABLE_QUICK_EDIT_MODE)|windows.ENABLE_EXTENDED_FLAGS) // https://docs.microsoft.com/en-us/windows/console/setconsolemode
-		}
-		windows.CloseHandle(handle)
-	}
+	disableQuickEdit()
+
 	fmt.Println(totsugeki)
 	fmt.Printf("                                         %s\n", Version)
 
@@ -322,7 +326,7 @@ func main() {
 	}
 
 	// Drop process priority
-	handle = windows.CurrentProcess()
+	handle := windows.CurrentProcess()
 	err = windows.SetPriorityClass(handle, windows.BELOW_NORMAL_PRIORITY_CLASS)
 	if err != nil {
 		fmt.Println(err)
