@@ -96,6 +96,18 @@ func cancelableSleep(ctx context.Context, delay time.Duration) {
 	waitCancel()
 }
 
+func clearScreen() {
+	handle := windows.Handle(os.Stdout.Fd())
+	var mode uint32
+	if windows.GetConsoleMode(handle, &mode) == nil {
+		if windows.SetConsoleMode(handle, (mode|windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING)) == nil {
+			windows.SetConsoleCursorPosition(handle, windows.Coord{X: 0, Y: 0})
+			fmt.Printf("\x1b[2J") // Clear screen
+		}
+		windows.SetConsoleMode(handle, mode) // Reset console even on failure since it's technically set with an invalid setting.
+	}
+}
+
 // Patch GGST as it starts
 func watchGGST(noClose bool, ctx context.Context) {
 	var patchedPid uint32 = 1
@@ -230,6 +242,8 @@ func autoUpdate() error {
 		if err != nil {
 			return errors.New("could not update totsugeki")
 		}
+
+		clearScreen()
 
 		command := exec.Command(exePath, os.Args[1:]...)
 		command.Stdout = os.Stdout
