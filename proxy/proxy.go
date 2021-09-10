@@ -23,6 +23,7 @@ type StriveAPIProxy struct {
 	wg             sync.WaitGroup
 	cachedNewsReq  *http.Response
 	cachedNewsBody []byte
+	prediction     StatsGetPrediction
 }
 
 type StriveAPIProxyOptions struct {
@@ -133,6 +134,10 @@ func (s *StriveAPIProxy) Shutdown() {
 	s.wg.Wait()
 }
 
+func (s *StriveAPIProxy) ResetStatsGetPrediction() {
+	s.prediction.predictionState = reset
+}
+
 func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL string, options *StriveAPIProxyOptions) *StriveAPIProxy {
 
 	transport := http.Transport{
@@ -172,10 +177,10 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 		predictStatsClient := client
 		predictStatsClient.Transport = &predictStatsTransport
 
-		prediction := CreateStatsGetPrediction(GGStriveAPIURL, &predictStatsClient)
-		r.Use(prediction.StatsGetStateHandler)
+		proxy.prediction = CreateStatsGetPrediction(GGStriveAPIURL, &predictStatsClient)
+		r.Use(proxy.prediction.StatsGetStateHandler)
 		statsGet = func(w http.ResponseWriter, r *http.Request) {
-			if !prediction.HandleGetStats(w, r) {
+			if !proxy.prediction.HandleGetStats(w, r) {
 				proxy.HandleCatchall(w, r)
 			}
 		}
