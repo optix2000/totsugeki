@@ -38,7 +38,7 @@ func (s *StriveAPIProxy) HandleStatsSet(w http.ResponseWriter, r *http.Request) 
 		Spacer1   [2]byte  // Unknown use. Always 0x00b3
 		Timestamp [19]byte // Current time in "YYYY/MM/DD HH:MM:SS" in UTC
 		Spacer2   [1]byte  // Unknown use. Always 0xa5
-		Version1  [5]byte  // Some sort of ASCII version number. "0.0.5", was "0.0.4" in v1.05
+		Version1  [5]byte  // Some sort of ASCII version number. "0.0.6" in v1.07. "0.0.5" in v1.06, was "0.0.4" in v1.05
 		Spacer3   [1]byte  // Unknown use. Always 0xa5
 		Version2  [5]byte  // Another version number. Always "0.0.2"
 		Spacer4   [1]byte  // Unknown use. Always 0xa5
@@ -58,7 +58,7 @@ func (s *StriveAPIProxy) HandleStatsSet(w http.ResponseWriter, r *http.Request) 
 		Spacer1:   [2]byte{0x00, 0xb3},
 		Timestamp: timestamp,
 		Spacer2:   [1]byte{0xa5},
-		Version1:  [5]byte{0x30, 0x2e, 0x30, 0x2e, 0x35}, // 0.0.5
+		Version1:  [5]byte{0x30, 0x2e, 0x30, 0x2e, 0x36}, // 0.0.6
 		Spacer3:   [1]byte{0xa5},
 		Version2:  [5]byte{0x30, 0x2e, 0x30, 0x2e, 0x32}, // 0.0.2
 		Spacer4:   [1]byte{0xa5},
