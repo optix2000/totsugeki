@@ -134,10 +134,6 @@ func (s *StriveAPIProxy) Shutdown() {
 	s.wg.Wait()
 }
 
-func (s *StriveAPIProxy) ResetStatsGetPrediction() {
-	s.prediction.predictionState = reset
-}
-
 func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL string, options *StriveAPIProxyOptions) *StriveAPIProxy {
 
 	transport := http.Transport{
