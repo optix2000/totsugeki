@@ -213,7 +213,6 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 			}
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req.Header.Set("Cache-Control", "no-cache")
-			req.Header.Set("Cookie", "theme=theme-dark")
 			req.Header.Set("User-Agent", "Steam")
 
 			apiURL, err := url.Parse(s.GGStriveAPIURL) // TODO: Const this
