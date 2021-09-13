@@ -4,7 +4,6 @@ package proxy
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -24,8 +23,6 @@ type StatsGetTask struct {
 
 type StatsGetPrediction struct {
 	GGStriveAPIURL  string
-	loginPrefix     string
-	apiVersion      string
 	predictionState PredictionState
 	statsGetTasks   map[string]*StatsGetTask
 	client          *http.Client
@@ -35,8 +32,7 @@ type PredictionState int
 
 // Declare typed constants each with type of status
 const (
-	config_missing PredictionState = iota
-	ready
+	ready PredictionState = iota
 	sending_calls
 )
 
@@ -64,31 +60,17 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch path {
-		case "/api/tus/read":
+		case "/api/tus/read", "/api/sys/get_news":
 			if s.predictionState == sending_calls {
 				fmt.Println("Done looking up stats")
 			}
 			s.predictionState = ready
 			next.ServeHTTP(w, r)
-		case "/api/sys/get_env":
-			wrappedWriter := CachingResponseWriter{w: w}
-			next.ServeHTTP(&wrappedWriter, r)
-			body := wrappedWriter.buf.Bytes()
-			s.ParseApiVersion(body)
-		case "/api/user/login":
-			wrappedWriter := CachingResponseWriter{w: w}
-			next.ServeHTTP(&wrappedWriter, r)
-			body := wrappedWriter.buf.Bytes()
-			s.ParseLoginPrefix(body)
 		case "/api/statistics/get":
 			if s.predictionState == ready {
 				body, _ := io.ReadAll(r.Body)
 				r.Body = io.NopCloser(bytes.NewBuffer(body))
-				if len(body) < 130 {
-					s.AsyncTitleScreenGetStats()
-				} else {
-					s.AsyncRCodeGetStats(body)
-				}
+				s.AsyncGetStats(body)
 				s.predictionState = sending_calls
 			}
 			next.ServeHTTP(w, r)
@@ -130,78 +112,6 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 		return false
 	}
 	return false
-}
-
-func (s *StatsGetPrediction) ParseLoginPrefix(loginRet []byte) {
-	s.loginPrefix = hex.EncodeToString(loginRet[60:79]) + hex.EncodeToString(loginRet[2:16])
-	if len(s.apiVersion) > 0 {
-		s.predictionState = ready
-	}
-}
-
-func (s *StatsGetPrediction) ParseApiVersion(getEnvBody []byte) {
-	s.apiVersion = hex.EncodeToString([]byte(strings.Split(string(getEnvBody), "\xa5")[1]))
-	if len(s.loginPrefix) > 0 {
-		s.predictionState = ready
-	}
-}
-
-func (s *StatsGetPrediction) BuildStatsReqBody(login string, req string, apiVersion string) string {
-	/*
-
-		Get Stats Call Analysis
-		E.g.
-		data=9295xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx02a5302e302e350396a007ffffffff^@
-
-		1.
-		"data="
-		length=5
-
-		2. Header?
-		9295
-		length=2
-
-
-		3. Login 1?
-		index in login response=60
-		length=19
-
-		4. Login 2?
-		index in login response=2
-		length=14
-
-		5. Divider?
-		02a5
-		l=2
-
-		6. Version?
-		302e302e35 (0.0.5)
-		l=5
-
-		7. Divider2?
-		03
-		l=1
-
-		8. Specific call
-		e.g. a007ffffffff , Confirm that this stays between users
-		l=6
-
-
-		9=End
-		\0
-		l=1
-	*/
-
-	var sb strings.Builder
-	sb.WriteString("data=")
-	sb.WriteString("9295") // Header
-	sb.WriteString(login)
-	sb.WriteString("02a5")     // Divider
-	sb.WriteString(apiVersion) // 0.0.5
-	sb.WriteString("03")       // Divider 2
-	sb.WriteString(req)
-	sb.WriteString("\x00") // End
-	return sb.String()
 }
 
 // Process the filled queue, then exit when it's empty
@@ -251,28 +161,16 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 
 }
 
-func (s *StatsGetPrediction) AsyncTitleScreenGetStats() {
-	reqs := ExpectedTitleScreenCalls()
-
-	queue := make(chan *StatsGetTask, len(reqs)+1)
-	for i := range reqs {
-		task := reqs[i]
-		id := s.BuildStatsReqBody(s.loginPrefix, task.data, s.apiVersion)
-		task.request = id
-		task.response = make(chan *http.Response)
-
-		s.statsGetTasks[id] = &task
-		queue <- &task
+func (s *StatsGetPrediction) AsyncGetStats(body []byte) {
+	var reqs []StatsGetTask
+	var bodyConst string
+	if len(body) < 130 {
+		reqs = ExpectedTitleScreenCalls()
+		bodyConst = strings.Replace(string(body), "96a007ffffffff\x00", "", 1)
+	} else {
+		reqs = ExpectedRCodeCalls()
+		bodyConst = strings.Replace(string(body), "07ffffffff\x00", "", 1)
 	}
-
-	for i := 0; i < StatsGetWorkers; i++ {
-		go s.ProcessStatsQueue(queue)
-	}
-}
-
-func (s *StatsGetPrediction) AsyncRCodeGetStats(body []byte) {
-	reqs := ExpectedRCodeCalls()
-	bodyConst := strings.Replace(string(body), "07ffffffff\x00", "", 1)
 
 	queue := make(chan *StatsGetTask, len(reqs)+1)
 	for i := range reqs {
@@ -293,9 +191,7 @@ func (s *StatsGetPrediction) AsyncRCodeGetStats(body []byte) {
 func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsGetPrediction {
 	return StatsGetPrediction{
 		GGStriveAPIURL:  GGStriveAPIURL,
-		loginPrefix:     "",
-		apiVersion:      hex.EncodeToString([]byte("0.0.6")),
-		predictionState: config_missing,
+		predictionState: ready,
 		statsGetTasks:   make(map[string]*StatsGetTask),
 		client:          client,
 	}
