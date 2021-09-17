@@ -60,16 +60,10 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch path {
-		case "/api/tus/read", "/api/sys/get_news":
-			if s.predictionState == sending_calls {
-				fmt.Println("Done looking up stats")
-			}
-			s.predictionState = ready
-			next.ServeHTTP(w, r)
 		case "/api/statistics/get":
-			if s.predictionState == ready {
-				body, _ := io.ReadAll(r.Body)
-				r.Body = io.NopCloser(bytes.NewBuffer(body))
+			body, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewBuffer(body))
+			if strings.HasSuffix(string(body), "07ffffffff\x00") {
 				s.AsyncGetStats(body)
 				s.predictionState = sending_calls
 			}
@@ -106,6 +100,10 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 				fmt.Println(err)
 			}
 			delete(s.statsGetTasks, req)
+			if len(s.statsGetTasks) == 0 {
+				s.predictionState = ready
+				fmt.Println("Done looking up stats")
+			}
 			return true
 		}
 		fmt.Println("Cache miss! " + req)
@@ -170,6 +168,11 @@ func (s *StatsGetPrediction) AsyncGetStats(body []byte) {
 	} else {
 		reqs = ExpectedRCodeCalls()
 		bodyConst = strings.Replace(string(body), "07ffffffff\x00", "", 1)
+	}
+
+	//Clear requests from previous round
+	for id := range s.statsGetTasks {
+		delete(s.statsGetTasks, id)
 	}
 
 	queue := make(chan *StatsGetTask, len(reqs)+1)
