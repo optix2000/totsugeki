@@ -179,10 +179,6 @@ func watchGGST(noClose bool, ctx context.Context) {
 					if !noClose {
 						close = true
 					}
-					// Reset stats_get_prediction state so it gets used again on 2nd+ start of GGST
-					if server != nil {
-						server.ResetStatsGetPrediction()
-					}
 					break
 				}
 			}
