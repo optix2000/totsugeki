@@ -189,6 +189,11 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 		getNews = proxy.HandleGetNews
 	}
 
+	// Make a random request to initialize TLS connection
+	resp, _ := client.Post(GGStriveAPIURL+"sys/get_env", "application/x-www-form-urlencoded", bytes.NewBuffer([]byte("data=9295a0a002a5302e302e360391cd0100")))
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+
 	r.Route("/api", func(r chi.Router) {
 		r.HandleFunc("/sys/get_env", proxy.HandleGetEnv)
 		r.HandleFunc("/statistics/get", statsGet)
