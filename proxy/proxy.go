@@ -198,6 +198,7 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 		r.HandleFunc("/sys/get_env", proxy.HandleGetEnv)
 		r.HandleFunc("/statistics/get", statsGet)
 		r.HandleFunc("/statistics/set", statsSet)
+		r.HandleFunc("/tus/write", statsSet)
 		r.HandleFunc("/sys/get_news", getNews)
 		r.HandleFunc("/catalog/get_follow", statsGet)
 		r.HandleFunc("/catalog/get_block", statsGet)
