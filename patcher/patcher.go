@@ -14,14 +14,10 @@ import (
 
 // Other necessary Windows API's
 var modKernel32 *windows.LazyDLL = windows.NewLazySystemDLL("kernel32.dll")
-var modPSAPI *windows.LazyDLL = windows.NewLazySystemDLL("psapi.dll")
 var procReadProcessMemory *windows.LazyProc = modKernel32.NewProc("ReadProcessMemory")
 var procWriteProcessMemory *windows.LazyProc = modKernel32.NewProc("WriteProcessMemory")
 var procVirtualProtectEx *windows.LazyProc = modKernel32.NewProc("VirtualProtectEx")
 var procVirtualQueryEx *windows.LazyProc = modKernel32.NewProc("VirtualQueryEx")
-var procEnumProcessModules *windows.LazyProc = modPSAPI.NewProc("EnumProcessModules")
-var procGetModuleInformation *windows.LazyProc = modPSAPI.NewProc("GetModuleInformation")
-var procGetModuleFileNameExA *windows.LazyProc = modPSAPI.NewProc("GetModuleFileNameExA")
 
 // Errors
 var ErrProcessAlreadyPatched = errors.New("process already patched")
@@ -175,27 +171,26 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 	}
 	defer windows.CloseHandle(proc)
 
-	var modules [512]uintptr // TODO: Don't hardcode
+	var modules [512]windows.Handle // TODO: Don't hardcode
 	var cb = uint32(unsafe.Sizeof(modules))
 	var cbNeeded uint32
 
-	ret, _, err := procEnumProcessModules.Call(uintptr(proc), uintptr(unsafe.Pointer(&modules)), uintptr(cb), uintptr(unsafe.Pointer(&cbNeeded)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
-		if err != windows.ERROR_PARTIAL_COPY { // Partial copies are fine
-			return 0, fmt.Errorf("error in EnumProcessModules: %w", err)
-		}
+	err = windows.EnumProcessModules(proc, &modules[0], cb, &cbNeeded)
+	if err != nil && err != windows.ERROR_PARTIAL_COPY { // Partial copies are fine
+		return 0, fmt.Errorf("error in EnumProcessModules: %w", err)
 	}
 
 	// Look for base module
 	var i uint32
-	var module uintptr
+	var module windows.Handle
 	for i = 0; i < cbNeeded/uint32(unsafe.Sizeof(modules[0])); i++ {
-		var moduleNameBuf [260]byte // TODO: Don't hardcode
-		ret, _, err = procGetModuleFileNameExA.Call(uintptr(proc), uintptr(modules[i]), uintptr(unsafe.Pointer(&moduleNameBuf)), unsafe.Sizeof(moduleNameBuf))
-		if ret == 0 { // err is always set, even on success. Need to look at return value
+		var moduleNameBuf [260]uint16 // TODO: Don't hardcode
+		err = windows.GetModuleFileNameEx(proc, modules[i], &moduleNameBuf[0], uint32(len(moduleNameBuf)))
+		if err != nil {
 			return 0, fmt.Errorf("error in GetModuleFileNameExA: %w", err)
 		}
-		if strings.EqualFold(filepath.Base(strings.TrimRight(string(moduleNameBuf[:]), "\000")), moduleName) {
+
+		if strings.EqualFold(filepath.Base(strings.TrimRight(windows.UTF16ToString(moduleNameBuf[:]), "\000")), moduleName) {
 			module = modules[i]
 			break
 		}
@@ -205,26 +200,22 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 	}
 
 	// Get Entrypoint so we have an idea where GGST's memory starts
-	var moduleInfo struct {
-		LPBaseOfDll uintptr
-		SizeOfImage uint32
-		EntryPoint  uintptr
-	}
+	var moduleInfo = windows.ModuleInfo{}
 
 	cb = uint32(unsafe.Sizeof(moduleInfo))
 
-	ret, _, err = procGetModuleInformation.Call(uintptr(proc), module, uintptr(unsafe.Pointer(&moduleInfo)), uintptr(cb))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
+	err = windows.GetModuleInformation(proc, module, &moduleInfo, cb)
+	if err != nil { // err is always set, even on success. Need to look at return value
 		return 0, fmt.Errorf("error in GetModuleInformationCall: %w", err)
 	}
 
-	var offset = moduleInfo.LPBaseOfDll + offsetAddr
+	var offset = moduleInfo.BaseOfDll + offsetAddr
 
 	// Check if the API is at the offset specified
 	offset, err = VerifyAPIOffset(proc, offset, old, new)
 	if err != nil {
 		// If the offset doesn't have the old or new API address, try searching memory
-		offset, err = SearchMemory(proc, moduleInfo.LPBaseOfDll, moduleInfo.SizeOfImage, old, new)
+		offset, err = SearchMemory(proc, moduleInfo.BaseOfDll, moduleInfo.SizeOfImage, old, new)
 		if err != nil {
 			return offset, err
 		}
@@ -232,7 +223,7 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 
 	// Set memory writable
 	var oldProtect uint32
-	ret, _, err = procVirtualProtectEx.Call(uintptr(proc), offset, uintptr(len(old)), windows.PAGE_READWRITE, uintptr(unsafe.Pointer(&oldProtect)))
+	ret, _, err := procVirtualProtectEx.Call(uintptr(proc), offset, uintptr(len(old)), windows.PAGE_READWRITE, uintptr(unsafe.Pointer(&oldProtect)))
 	if ret == 0 { // err is always set, even on success. Need to look at return value
 		return offset, fmt.Errorf("error in VirtualProtectEx: %w", err)
 	}
@@ -252,7 +243,7 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 	}
 
 	err = nil
-	if offsetAddr != (offset - moduleInfo.LPBaseOfDll) {
+	if offsetAddr != (offset - moduleInfo.BaseOfDll) {
 		err = ErrOffsetMismatch
 	}
 	return offset, err
