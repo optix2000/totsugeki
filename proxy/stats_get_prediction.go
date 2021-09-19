@@ -36,6 +36,13 @@ const (
 	sending_calls
 )
 
+type StatsGetType int
+
+const (
+	title_screen StatsGetType = iota
+	r_code
+)
+
 type CachingResponseWriter struct {
 	w    http.ResponseWriter
 	buf  bytes.Buffer
@@ -63,8 +70,11 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 		case "/api/statistics/get":
 			body, _ := io.ReadAll(r.Body)
 			r.Body = io.NopCloser(bytes.NewBuffer(body))
-			if strings.HasSuffix(string(body), "07ffffffff\x00") {
-				s.AsyncGetStats(body)
+			if strings.HasSuffix(string(body), ExpectedTitleScreenCalls()[0].data+"\x00") {
+				s.AsyncGetStats(body, title_screen)
+				s.predictionState = sending_calls
+			} else if strings.HasSuffix(string(body), ExpectedRCodeCalls()[0].data+"\x00") {
+				s.AsyncGetStats(body, r_code)
 				s.predictionState = sending_calls
 			}
 			next.ServeHTTP(w, r)
@@ -159,16 +169,14 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 
 }
 
-func (s *StatsGetPrediction) AsyncGetStats(body []byte) {
+func (s *StatsGetPrediction) AsyncGetStats(body []byte, reqType StatsGetType) {
 	var reqs []StatsGetTask
-	var bodyConst string
-	if len(body) < 130 {
+	if reqType == title_screen {
 		reqs = ExpectedTitleScreenCalls()
-		bodyConst = strings.Replace(string(body), "96a007ffffffff\x00", "", 1)
 	} else {
 		reqs = ExpectedRCodeCalls()
-		bodyConst = strings.Replace(string(body), "07ffffffff\x00", "", 1)
 	}
+	bodyConst := strings.Replace(string(body), reqs[0].data+"\x00", "", 1)
 
 	//Clear requests from previous round
 	for id := range s.statsGetTasks {
