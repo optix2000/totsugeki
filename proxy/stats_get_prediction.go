@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -26,6 +27,7 @@ type StatsGetPrediction struct {
 	predictionState PredictionState
 	statsGetTasks   map[string]*StatsGetTask
 	client          *http.Client
+	PredictReplay   bool
 }
 
 type PredictionState int
@@ -92,6 +94,16 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 		r.Body.Close()                                        //  must close
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes)) // Reset Body as the request gets reused by catchall if this has an error.
 		req := string(bodyBytes)
+		if strings.HasSuffix(r.RequestURI, "catalog/get_replay") {
+			regex := regexp.MustCompile(`940100059aff00.*$`)
+			for _, data := range []string{"940100059aff00636390ffff000001\x00", "940100059aff00636390ffff010001\x00", "940100059aff00636390ffff020001\x00"} {
+				possibleReq := regex.ReplaceAllString(req, data)
+				if _, ok := s.statsGetTasks[possibleReq]; ok {
+					req = possibleReq
+					break
+				}
+			}
+		}
 		if task, ok := s.statsGetTasks[req]; ok {
 			resp := <-task.response
 			if resp == nil {
@@ -186,6 +198,11 @@ func (s *StatsGetPrediction) AsyncGetStats(body []byte, reqType StatsGetType) {
 	queue := make(chan *StatsGetTask, len(reqs)+1)
 	for i := range reqs {
 		task := reqs[i]
+
+		if task.path == "catalog/get_replay" && !s.PredictReplay {
+			continue
+		}
+
 		id := bodyConst + task.data + "\x00"
 		task.request = id
 		task.response = make(chan *http.Response)
@@ -205,6 +222,7 @@ func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsG
 		predictionState: ready,
 		statsGetTasks:   make(map[string]*StatsGetTask),
 		client:          client,
+		PredictReplay:   false,
 	}
 }
 
@@ -305,6 +323,9 @@ func ExpectedTitleScreenCalls() []StatsGetTask {
 		{data: "96a00101ffffff", path: "statistics/get"},
 		{data: "93000101", path: "catalog/get_follow"},
 		{data: "920101", path: "catalog/get_block"},
+		{data: "940100059aff00636390ffff000001", path: "catalog/get_replay"}, // these 3 only get used if unsafe-predict-replay is set
+		{data: "940100059aff00636390ffff010001", path: "catalog/get_replay"},
+		{data: "940100059aff00636390ffff020001", path: "catalog/get_replay"},
 		{data: "91a0", path: "lobby/get_vip_status"},
 		{data: "9105", path: "item/get_item"},
 	}
