@@ -26,6 +26,7 @@ type StatsGetPrediction struct {
 	predictionState PredictionState
 	statsGetTasks   map[string]*StatsGetTask
 	client          *http.Client
+	skipNext        bool
 }
 
 type PredictionState int
@@ -67,15 +68,17 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch path {
+		case "/api/user/create":
+			// statistics/get doesn't happen as expected on account creation
+			s.skipNext = true
+			next.ServeHTTP(w, r)
 		case "/api/statistics/get":
 			body, _ := io.ReadAll(r.Body)
 			r.Body = io.NopCloser(bytes.NewBuffer(body))
 			if strings.HasSuffix(string(body), ExpectedTitleScreenCalls()[0].data+"\x00") {
 				s.AsyncGetStats(body, title_screen)
-				s.predictionState = sending_calls
 			} else if strings.HasSuffix(string(body), ExpectedRCodeCalls()[0].data+"\x00") {
 				s.AsyncGetStats(body, r_code)
-				s.predictionState = sending_calls
 			}
 			next.ServeHTTP(w, r)
 		default:
@@ -170,6 +173,11 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 }
 
 func (s *StatsGetPrediction) AsyncGetStats(body []byte, reqType StatsGetType) {
+	if s.skipNext {
+		s.skipNext = false
+		return
+	}
+
 	var reqs []StatsGetTask
 	if reqType == title_screen {
 		reqs = ExpectedTitleScreenCalls()
@@ -194,6 +202,8 @@ func (s *StatsGetPrediction) AsyncGetStats(body []byte, reqType StatsGetType) {
 		queue <- &task
 	}
 
+	s.predictionState = sending_calls
+
 	for i := 0; i < StatsGetWorkers; i++ {
 		go s.ProcessStatsQueue(queue)
 	}
@@ -205,6 +215,7 @@ func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsG
 		predictionState: ready,
 		statsGetTasks:   make(map[string]*StatsGetTask),
 		client:          client,
+		skipNext:        false,
 	}
 }
 
