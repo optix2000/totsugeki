@@ -34,6 +34,7 @@ type StriveAPIProxyOptions struct {
 	PredictStatsGet bool
 	CacheNews       bool
 	NoNews          bool
+	PredictReplay   bool
 	CacheEnv        bool
 }
 
@@ -169,6 +170,7 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 	statsSet := proxy.HandleCatchall
 	statsGet := proxy.HandleCatchall
 	getNews := proxy.HandleCatchall
+	getReplay := proxy.HandleCatchall
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
@@ -191,6 +193,11 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 			if !proxy.prediction.HandleGetStats(w, r) {
 				proxy.HandleCatchall(w, r)
 			}
+		}
+
+		if options.PredictReplay {
+			getReplay = statsGet
+			proxy.prediction.PredictReplay = true
 		}
 	}
 	if options.NoNews {
@@ -225,6 +232,7 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 		r.HandleFunc("/sys/get_news", getNews)
 		r.HandleFunc("/catalog/get_follow", statsGet)
 		r.HandleFunc("/catalog/get_block", statsGet)
+		r.HandleFunc("/catalog/get_replay", getReplay)
 		r.HandleFunc("/lobby/get_vip_status", statsGet)
 		r.HandleFunc("/item/get_item", statsGet)
 		r.HandleFunc("/*", proxy.HandleCatchall)

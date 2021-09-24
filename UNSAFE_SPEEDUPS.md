@@ -72,3 +72,28 @@ GGST will display some default news instead of the latest ones.
 
 Since this returns a completely empty body, it might break the game in future versions. If that happens this would have to be expanded to return some skeleton news entries.  
 Right now GGST seems to handle the empty body gracefully.
+
+## `-unsafe-cache-env` ([@Borengar](https://github.com/Borengar))
+
+(v1.6.0+)
+
+Totsugeki returns a hard-coded response for `/api/sys/get_env` calls.
+
+This request gets called before every `/api/user/login` one. (Initial loading on title screen; replays; ranking; entering tower; etc).
+
+### Speedup
+
+Up to 1 second every time when you enter the tower, open replays, open the ranking list, etc.  
+2 seconds on the initial title screen loading if you start fast enough.
+
+## `-unsafe-predict-replay` ([@Borengar](https://github.com/Borengar))
+
+(v1.7.0+)
+
+Totsugeki prefetches random celestial floor replays for the loading screen `/api/catalog/get_replay` calls.
+
+The first batch of recommended replays will contain random replays when you open the replays dialog. A refresh will load actual replays that are recommended for you.
+
+### Speedup
+
+2-3 seconds saved on the initial loading on title screen.
