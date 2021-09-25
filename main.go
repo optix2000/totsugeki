@@ -359,16 +359,6 @@ func main() {
 	defer cancel()
 	sig = make(chan os.Signal, 1)
 
-	// Watch for signal to do graceful shutdown
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		<-sig
-		cancel()
-		server.Shutdown()
-	}()
-
 	// Start Patcher
 	if !*noPatch {
 		wg.Add(1)
@@ -414,6 +404,16 @@ func main() {
 					panic(err)
 				}
 			}
+		}()
+
+		// Watch for signal to do graceful shutdown
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+			<-sig
+			cancel()
+			server.Shutdown()
 		}()
 	}
 
