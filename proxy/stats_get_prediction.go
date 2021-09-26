@@ -23,12 +23,16 @@ type StatsGetTask struct {
 }
 
 type StatsGetPrediction struct {
-	GGStriveAPIURL  string
-	predictionState PredictionState
-	statsGetTasks   map[string]*StatsGetTask
-	client          *http.Client
-	PredictReplay   bool
-	skipNext        bool
+	GGStriveAPIURL   string
+	predictionState  PredictionState
+	statsGetTasks    map[string]*StatsGetTask
+	client           *http.Client
+	PredictReplay    bool
+	skipNext         bool
+	cachedFollowReq  *http.Response
+	cachedFollowBody []byte
+	cachedBlockReq   *http.Response
+	cachedBlockBody  []byte
 }
 
 type PredictionState int
@@ -66,6 +70,20 @@ func (rw *CachingResponseWriter) Write(data []byte) (int, error) {
 	return rw.w.Write(data)
 }
 
+func (s *StatsGetPrediction) proxyRequest(r *http.Request) (*http.Response, error) {
+	apiURL, err := url.Parse(s.GGStriveAPIURL)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	apiURL.Path = r.URL.Path
+
+	r.URL = apiURL
+	r.Host = ""
+	r.RequestURI = ""
+	return s.client.Do(r)
+}
+
 func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -82,6 +100,14 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 			} else if strings.HasSuffix(string(body), ExpectedRCodeCalls()[0].data+"\x00") {
 				s.AsyncGetStats(body, r_code)
 			}
+			next.ServeHTTP(w, r)
+		case "/api/follow/follow_user", "/api/follow/unfollow_user":
+			s.cachedFollowReq = nil
+			s.cachedFollowBody = nil
+			next.ServeHTTP(w, r)
+		case "/api/follow/block_user", "/api/follow/unblock_user":
+			s.cachedBlockReq = nil
+			s.cachedBlockBody = nil
 			next.ServeHTTP(w, r)
 		default:
 			next.ServeHTTP(w, r)
@@ -120,9 +146,18 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 				w.Header()[name] = values
 			}
 			w.WriteHeader(resp.StatusCode)
-			_, err := io.Copy(w, resp.Body)
+			reader := io.TeeReader(resp.Body, w) // For dumping API payloads
+			buf, err := io.ReadAll(reader)
 			if err != nil {
 				fmt.Println(err)
+			}
+			if strings.HasSuffix(r.RequestURI, "catalog/get_follow") {
+				s.cachedFollowReq = resp
+				s.cachedFollowBody = buf
+			}
+			if strings.HasSuffix(r.RequestURI, "catalog/get_block") {
+				s.cachedBlockReq = resp
+				s.cachedBlockBody = buf
 			}
 			delete(s.statsGetTasks, req)
 			if len(s.statsGetTasks) == 0 {
@@ -133,8 +168,69 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 		}
 		fmt.Println("Cache miss! " + req)
 		return false
+	} else {
+		if strings.HasSuffix(r.RequestURI, "catalog/get_follow") {
+			if s.cachedFollowReq != nil {
+				for name, values := range s.cachedFollowReq.Header {
+					w.Header()[name] = values
+				}
+				w.Write(s.cachedFollowBody)
+				return true
+			} else {
+				resp, err := s.proxyRequest(r)
+				if err != nil {
+					fmt.Println(err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return false
+				}
+				defer resp.Body.Close()
+				// Copy headers
+				for name, values := range resp.Header {
+					w.Header()[name] = values
+				}
+				w.WriteHeader(resp.StatusCode)
+				reader := io.TeeReader(resp.Body, w) // For dumping API payloads
+				buf, err := io.ReadAll(reader)
+				if err != nil {
+					fmt.Println(err)
+				}
+				s.cachedFollowReq = resp
+				s.cachedFollowBody = buf
+				return true
+			}
+		}
+		if strings.HasSuffix(r.RequestURI, "catalog/get_block") {
+			if s.cachedBlockReq != nil {
+				for name, values := range s.cachedBlockReq.Header {
+					w.Header()[name] = values
+				}
+				w.Write(s.cachedBlockBody)
+				return true
+			} else {
+				resp, err := s.proxyRequest(r)
+				if err != nil {
+					fmt.Println(err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return false
+				}
+				defer resp.Body.Close()
+				// Copy headers
+				for name, values := range resp.Header {
+					w.Header()[name] = values
+				}
+				w.WriteHeader(resp.StatusCode)
+				reader := io.TeeReader(resp.Body, w) // For dumping API payloads
+				buf, err := io.ReadAll(reader)
+				if err != nil {
+					fmt.Println(err)
+				}
+				s.cachedBlockReq = resp
+				s.cachedBlockBody = buf
+				return true
+			}
+		}
+		return false
 	}
-	return false
 }
 
 // Process the filled queue, then exit when it's empty
