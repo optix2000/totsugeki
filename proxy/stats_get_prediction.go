@@ -23,16 +23,13 @@ type StatsGetTask struct {
 }
 
 type StatsGetPrediction struct {
-	GGStriveAPIURL   string
-	predictionState  PredictionState
-	statsGetTasks    map[string]*StatsGetTask
-	client           *http.Client
-	PredictReplay    bool
-	skipNext         bool
-	cachedFollowReq  *http.Response
-	cachedFollowBody []byte
-	cachedBlockReq   *http.Response
-	cachedBlockBody  []byte
+	GGStriveAPIURL  string
+	predictionState PredictionState
+	statsGetTasks   map[string]*StatsGetTask
+	client          *http.Client
+	PredictReplay   bool
+	skipNext        bool
+	responseCache   *ResponseCache
 }
 
 type PredictionState int
@@ -102,12 +99,10 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 			}
 			next.ServeHTTP(w, r)
 		case "/api/follow/follow_user", "/api/follow/unfollow_user":
-			s.cachedFollowReq = nil
-			s.cachedFollowBody = nil
+			s.responseCache.RemoveResponse("catalog/get_follow")
 			next.ServeHTTP(w, r)
 		case "/api/follow/block_user", "/api/follow/unblock_user":
-			s.cachedBlockReq = nil
-			s.cachedBlockBody = nil
+			s.responseCache.RemoveResponse("catalog/get_block")
 			next.ServeHTTP(w, r)
 		default:
 			next.ServeHTTP(w, r)
@@ -152,12 +147,10 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 				fmt.Println(err)
 			}
 			if strings.HasSuffix(r.RequestURI, "catalog/get_follow") {
-				s.cachedFollowReq = resp
-				s.cachedFollowBody = buf
+				s.responseCache.AddResponse("catalog/get_follow", resp, buf)
 			}
 			if strings.HasSuffix(r.RequestURI, "catalog/get_block") {
-				s.cachedBlockReq = resp
-				s.cachedBlockBody = buf
+				s.responseCache.AddResponse("catalog/get_block", resp, buf)
 			}
 			delete(s.statsGetTasks, req)
 			if len(s.statsGetTasks) == 0 {
@@ -170,11 +163,12 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 		return false
 	} else {
 		if strings.HasSuffix(r.RequestURI, "catalog/get_follow") {
-			if s.cachedFollowReq != nil {
-				for name, values := range s.cachedFollowReq.Header {
+			if s.responseCache.ResponseExists("catalog/get_follow") {
+				resp, body := s.responseCache.GetResponse("catalog/get_follow")
+				for name, values := range resp.Header {
 					w.Header()[name] = values
 				}
-				w.Write(s.cachedFollowBody)
+				w.Write(body)
 				return true
 			} else {
 				resp, err := s.proxyRequest(r)
@@ -194,17 +188,17 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 				if err != nil {
 					fmt.Println(err)
 				}
-				s.cachedFollowReq = resp
-				s.cachedFollowBody = buf
+				s.responseCache.AddResponse("catalog/get_follow", resp, buf)
 				return true
 			}
 		}
 		if strings.HasSuffix(r.RequestURI, "catalog/get_block") {
-			if s.cachedBlockReq != nil {
-				for name, values := range s.cachedBlockReq.Header {
+			if s.responseCache.ResponseExists("catalog/get_block") {
+				resp, body := s.responseCache.GetResponse("catalog/get_block")
+				for name, values := range resp.Header {
 					w.Header()[name] = values
 				}
-				w.Write(s.cachedBlockBody)
+				w.Write(body)
 				return true
 			} else {
 				resp, err := s.proxyRequest(r)
@@ -224,8 +218,7 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 				if err != nil {
 					fmt.Println(err)
 				}
-				s.cachedBlockReq = resp
-				s.cachedBlockBody = buf
+				s.responseCache.AddResponse("catalog/get_block", resp, buf)
 				return true
 			}
 		}
@@ -322,7 +315,7 @@ func (s *StatsGetPrediction) AsyncGetStats(body []byte, reqType StatsGetType) {
 	}
 }
 
-func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsGetPrediction {
+func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client, responseCache *ResponseCache) StatsGetPrediction {
 	return StatsGetPrediction{
 		GGStriveAPIURL:  GGStriveAPIURL,
 		predictionState: ready,
@@ -330,6 +323,7 @@ func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsG
 		client:          client,
 		PredictReplay:   false,
 		skipNext:        false,
+		responseCache:   responseCache,
 	}
 }
 
