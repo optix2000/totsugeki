@@ -16,10 +16,11 @@ import (
 const StatsGetWorkers = 5
 
 type StatsGetTask struct {
-	data     string
-	path     string
-	request  string
-	response chan *http.Response
+	data         string
+	path         string
+	request      string
+	response     chan *http.Response
+	responseBody []byte
 }
 
 type StatsGetPrediction struct {
@@ -135,22 +136,17 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 				delete(s.statsGetTasks, req)
 				return false
 			}
-			defer resp.Body.Close()
 			// Copy headers
 			for name, values := range resp.Header {
 				w.Header()[name] = values
 			}
 			w.WriteHeader(resp.StatusCode)
-			reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-			buf, err := io.ReadAll(reader)
-			if err != nil {
-				fmt.Println(err)
-			}
+			w.Write(task.responseBody)
 			if strings.HasSuffix(r.RequestURI, "catalog/get_follow") {
-				s.responseCache.AddResponse("catalog/get_follow", resp, buf)
+				s.responseCache.AddResponse("catalog/get_follow", resp, task.responseBody)
 			}
 			if strings.HasSuffix(r.RequestURI, "catalog/get_block") {
-				s.responseCache.AddResponse("catalog/get_block", resp, buf)
+				s.responseCache.AddResponse("catalog/get_block", resp, task.responseBody)
 			}
 			delete(s.statsGetTasks, req)
 			if len(s.statsGetTasks) == 0 {
@@ -262,7 +258,15 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 				fmt.Println(err)
 				item.response <- nil
 			} else {
-				item.response <- res
+				buf, err := io.ReadAll(res.Body)
+				res.Body.Close()
+				if err != nil {
+					fmt.Println(err)
+					item.response <- nil
+				} else {
+					item.responseBody = buf
+					item.response <- res
+				}
 			}
 		default:
 			fmt.Println("Empty queue, shutting down")
@@ -302,7 +306,7 @@ func (s *StatsGetPrediction) AsyncGetStats(body []byte, reqType StatsGetType) {
 
 		id := bodyConst + task.data + "\x00"
 		task.request = id
-		task.response = make(chan *http.Response)
+		task.response = make(chan *http.Response, 1)
 
 		s.statsGetTasks[id] = &task
 		queue <- &task
