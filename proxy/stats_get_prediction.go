@@ -99,17 +99,10 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 				s.AsyncGetStats(body, r_code)
 			}
 			next.ServeHTTP(w, r)
-		case "/api/follow/follow_user", "/api/follow/unfollow_user":
-			s.responseCache.RemoveResponse("catalog/get_follow")
-			next.ServeHTTP(w, r)
-		case "/api/follow/block_user", "/api/follow/unblock_user":
-			s.responseCache.RemoveResponse("catalog/get_block")
-			next.ServeHTTP(w, r)
 		default:
 			next.ServeHTTP(w, r)
 		}
 	})
-
 }
 
 // Proxy getstats
@@ -142,12 +135,6 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 			}
 			w.WriteHeader(resp.StatusCode)
 			w.Write(task.responseBody)
-			if strings.HasSuffix(r.RequestURI, "catalog/get_follow") {
-				s.responseCache.AddResponse("catalog/get_follow", resp, task.responseBody)
-			}
-			if strings.HasSuffix(r.RequestURI, "catalog/get_block") {
-				s.responseCache.AddResponse("catalog/get_block", resp, task.responseBody)
-			}
 			delete(s.statsGetTasks, req)
 			if len(s.statsGetTasks) == 0 {
 				s.predictionState = ready
@@ -157,69 +144,8 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 		}
 		fmt.Println("Cache miss! " + req)
 		return false
-	} else {
-		if strings.HasSuffix(r.RequestURI, "catalog/get_follow") {
-			if s.responseCache.ResponseExists("catalog/get_follow") {
-				resp, body := s.responseCache.GetResponse("catalog/get_follow")
-				for name, values := range resp.Header {
-					w.Header()[name] = values
-				}
-				w.Write(body)
-				return true
-			} else {
-				resp, err := s.proxyRequest(r)
-				if err != nil {
-					fmt.Println(err)
-					w.WriteHeader(http.StatusInternalServerError)
-					return false
-				}
-				defer resp.Body.Close()
-				// Copy headers
-				for name, values := range resp.Header {
-					w.Header()[name] = values
-				}
-				w.WriteHeader(resp.StatusCode)
-				reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-				buf, err := io.ReadAll(reader)
-				if err != nil {
-					fmt.Println(err)
-				}
-				s.responseCache.AddResponse("catalog/get_follow", resp, buf)
-				return true
-			}
-		}
-		if strings.HasSuffix(r.RequestURI, "catalog/get_block") {
-			if s.responseCache.ResponseExists("catalog/get_block") {
-				resp, body := s.responseCache.GetResponse("catalog/get_block")
-				for name, values := range resp.Header {
-					w.Header()[name] = values
-				}
-				w.Write(body)
-				return true
-			} else {
-				resp, err := s.proxyRequest(r)
-				if err != nil {
-					fmt.Println(err)
-					w.WriteHeader(http.StatusInternalServerError)
-					return false
-				}
-				defer resp.Body.Close()
-				// Copy headers
-				for name, values := range resp.Header {
-					w.Header()[name] = values
-				}
-				w.WriteHeader(resp.StatusCode)
-				reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-				buf, err := io.ReadAll(reader)
-				if err != nil {
-					fmt.Println(err)
-				}
-				s.responseCache.AddResponse("catalog/get_block", resp, buf)
-				return true
-			}
-		}
-		return false
 	}
+	return false
 }
 
 // Process the filled queue, then exit when it's empty
@@ -264,8 +190,17 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 					fmt.Println(err)
 					item.response <- nil
 				} else {
-					item.responseBody = buf
-					item.response <- res
+					//add get_follow and get_block to the generic response cache instead of the prediction queue
+					if strings.HasSuffix(req.URL.Path, "catalog/get_follow") {
+						s.responseCache.AddResponse("catalog/get_follow", res, buf)
+						delete(s.statsGetTasks, item.request)
+					} else if strings.HasSuffix(req.URL.Path, "catalog/get_block") {
+						s.responseCache.AddResponse("catalog/get_block", res, buf)
+						delete(s.statsGetTasks, item.request)
+					} else {
+						item.responseBody = buf
+						item.response <- res
+					}
 				}
 			}
 		default:
@@ -274,7 +209,6 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 
 		}
 	}
-
 }
 
 func (s *StatsGetPrediction) AsyncGetStats(body []byte, reqType StatsGetType) {

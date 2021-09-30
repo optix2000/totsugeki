@@ -33,6 +33,7 @@ type StriveAPIProxyOptions struct {
 	NoNews          bool
 	PredictReplay   bool
 	CacheEnv        bool
+	CacheFollow     bool
 }
 
 func (s *StriveAPIProxy) proxyRequest(r *http.Request) (*http.Response, error) {
@@ -68,6 +69,23 @@ func (s *StriveAPIProxy) HandleCatchall(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		fmt.Println(err)
 	}
+}
+
+// Invalidate cache if certain requests are used
+func (s *StriveAPIProxy) CacheInvalidationHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch path {
+		case "/api/follow/follow_user", "/api/follow/unfollow_user":
+			s.responseCache.RemoveResponse("catalog/get_follow")
+			next.ServeHTTP(w, r)
+		case "/api/follow/block_user", "/api/follow/unblock_user":
+			s.responseCache.RemoveResponse("catalog/get_block")
+			next.ServeHTTP(w, r)
+		default:
+			next.ServeHTTP(w, r)
+		}
+	})
 }
 
 // GGST uses the URL from this API after initial launch so we need to intercept this.
@@ -130,6 +148,66 @@ func (s *StriveAPIProxy) HandleGetNews(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// UNSAFE: Cache get_follow on first request. On every other request return the cached value.
+func (s *StriveAPIProxy) HandleGetFollow(w http.ResponseWriter, r *http.Request) {
+	if s.responseCache.ResponseExists("catalog/get_follow") {
+		resp, body := s.responseCache.GetResponse("catalog/get_follow")
+		for name, values := range resp.Header {
+			w.Header()[name] = values
+		}
+		w.Write(body)
+	} else {
+		resp, err := s.proxyRequest(r)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+		// Copy headers
+		for name, values := range resp.Header {
+			w.Header()[name] = values
+		}
+		w.WriteHeader(resp.StatusCode)
+		reader := io.TeeReader(resp.Body, w) // For dumping API payloads
+		buf, err := io.ReadAll(reader)
+		if err != nil {
+			fmt.Println(err)
+		}
+		s.responseCache.AddResponse("catalog/get_follow", resp, buf)
+	}
+}
+
+// UNSAFE: Cache get_block on first request. On every other request return the cached value.
+func (s *StriveAPIProxy) HandleGetBlock(w http.ResponseWriter, r *http.Request) {
+	if s.responseCache.ResponseExists("catalog/get_block") {
+		resp, body := s.responseCache.GetResponse("catalog/get_block")
+		for name, values := range resp.Header {
+			w.Header()[name] = values
+		}
+		w.Write(body)
+	} else {
+		resp, err := s.proxyRequest(r)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+		// Copy headers
+		for name, values := range resp.Header {
+			w.Header()[name] = values
+		}
+		w.WriteHeader(resp.StatusCode)
+		reader := io.TeeReader(resp.Body, w) // For dumping API payloads
+		buf, err := io.ReadAll(reader)
+		if err != nil {
+			fmt.Println(err)
+		}
+		s.responseCache.AddResponse("catalog/get_block", resp, buf)
+	}
+}
+
 func (s *StriveAPIProxy) Shutdown() {
 	fmt.Println("Shutting down proxy...")
 
@@ -172,8 +250,11 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 	statsGet := proxy.HandleCatchall
 	getNews := proxy.HandleCatchall
 	getReplay := proxy.HandleCatchall
+	getFollow := proxy.HandleCatchall
+	getBlock := proxy.HandleCatchall
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(proxy.CacheInvalidationHandler)
 
 	if options.AsyncStatsSet {
 		statsSet = proxy.HandleStatsSet
@@ -208,6 +289,10 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 	} else if options.CacheNews {
 		getNews = proxy.HandleGetNews
 	}
+	if options.CacheFollow {
+		getFollow = proxy.HandleGetFollow
+		getBlock = proxy.HandleGetBlock
+	}
 
 	if options.CacheEnv {
 		proxy.CacheEnv = true
@@ -230,8 +315,8 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 		r.HandleFunc("/statistics/set", statsSet)
 		r.HandleFunc("/tus/write", statsSet)
 		r.HandleFunc("/sys/get_news", getNews)
-		r.HandleFunc("/catalog/get_follow", statsGet)
-		r.HandleFunc("/catalog/get_block", statsGet)
+		r.HandleFunc("/catalog/get_follow", getFollow)
+		r.HandleFunc("/catalog/get_block", getBlock)
 		r.HandleFunc("/catalog/get_replay", getReplay)
 		r.HandleFunc("/lobby/get_vip_status", statsGet)
 		r.HandleFunc("/item/get_item", statsGet)
