@@ -88,6 +88,36 @@ func (s *StriveAPIProxy) CacheInvalidationHandler(next http.Handler) http.Handle
 	})
 }
 
+// Generic handler func for cached requests
+func (s *StriveAPIProxy) HandleCachedRequest(request string, w http.ResponseWriter, r *http.Request) {
+	if s.responseCache.ResponseExists(request) {
+		resp, body := s.responseCache.GetResponse(request)
+		for name, values := range resp.Header {
+			w.Header()[name] = values
+		}
+		w.Write(body)
+	} else {
+		resp, err := s.proxyRequest(r)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+		// Copy headers
+		for name, values := range resp.Header {
+			w.Header()[name] = values
+		}
+		w.WriteHeader(resp.StatusCode)
+		reader := io.TeeReader(resp.Body, w) // For dumping API payloads
+		buf, err := io.ReadAll(reader)
+		if err != nil {
+			fmt.Println(err)
+		}
+		s.responseCache.AddResponse(request, resp, buf)
+	}
+}
+
 // GGST uses the URL from this API after initial launch so we need to intercept this.
 func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
 	if s.CacheEnv && s.responseCache.ResponseExists("sys/get_env") {
@@ -120,92 +150,17 @@ func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
 
 // UNSAFE: Cache news on first request. On every other request return the cached value.
 func (s *StriveAPIProxy) HandleGetNews(w http.ResponseWriter, r *http.Request) {
-	if s.responseCache.ResponseExists("sys/get_news") {
-		resp, body := s.responseCache.GetResponse("sys/get_news")
-		for name, values := range resp.Header {
-			w.Header()[name] = values
-		}
-		w.Write(body)
-	} else {
-		resp, err := s.proxyRequest(r)
-		if err != nil {
-			fmt.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer resp.Body.Close()
-		// Copy headers
-		for name, values := range resp.Header {
-			w.Header()[name] = values
-		}
-		w.WriteHeader(resp.StatusCode)
-		reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-		buf, err := io.ReadAll(reader)
-		if err != nil {
-			fmt.Println(err)
-		}
-		s.responseCache.AddResponse("sys/get_news", resp, buf)
-	}
+	s.HandleCachedRequest("sys/get_news", w, r)
 }
 
 // UNSAFE: Cache get_follow on first request. On every other request return the cached value.
 func (s *StriveAPIProxy) HandleGetFollow(w http.ResponseWriter, r *http.Request) {
-	if s.responseCache.ResponseExists("catalog/get_follow") {
-		resp, body := s.responseCache.GetResponse("catalog/get_follow")
-		for name, values := range resp.Header {
-			w.Header()[name] = values
-		}
-		w.Write(body)
-	} else {
-		resp, err := s.proxyRequest(r)
-		if err != nil {
-			fmt.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer resp.Body.Close()
-		// Copy headers
-		for name, values := range resp.Header {
-			w.Header()[name] = values
-		}
-		w.WriteHeader(resp.StatusCode)
-		reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-		buf, err := io.ReadAll(reader)
-		if err != nil {
-			fmt.Println(err)
-		}
-		s.responseCache.AddResponse("catalog/get_follow", resp, buf)
-	}
+	s.HandleCachedRequest("catalog/get_follow", w, r)
 }
 
 // UNSAFE: Cache get_block on first request. On every other request return the cached value.
 func (s *StriveAPIProxy) HandleGetBlock(w http.ResponseWriter, r *http.Request) {
-	if s.responseCache.ResponseExists("catalog/get_block") {
-		resp, body := s.responseCache.GetResponse("catalog/get_block")
-		for name, values := range resp.Header {
-			w.Header()[name] = values
-		}
-		w.Write(body)
-	} else {
-		resp, err := s.proxyRequest(r)
-		if err != nil {
-			fmt.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer resp.Body.Close()
-		// Copy headers
-		for name, values := range resp.Header {
-			w.Header()[name] = values
-		}
-		w.WriteHeader(resp.StatusCode)
-		reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-		buf, err := io.ReadAll(reader)
-		if err != nil {
-			fmt.Println(err)
-		}
-		s.responseCache.AddResponse("catalog/get_block", resp, buf)
-	}
+	s.HandleCachedRequest("catalog/get_block", w, r)
 }
 
 func (s *StriveAPIProxy) Shutdown() {
