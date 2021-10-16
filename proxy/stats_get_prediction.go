@@ -16,10 +16,11 @@ import (
 const StatsGetWorkers = 5
 
 type StatsGetTask struct {
-	data     string
-	path     string
-	request  string
-	response chan *http.Response
+	data         string
+	path         string
+	request      string
+	response     chan *http.Response
+	responseBody []byte
 }
 
 type StatsGetPrediction struct {
@@ -29,6 +30,7 @@ type StatsGetPrediction struct {
 	client          *http.Client
 	PredictReplay   bool
 	skipNext        bool
+	responseCache   *ResponseCache
 }
 
 type PredictionState int
@@ -66,6 +68,20 @@ func (rw *CachingResponseWriter) Write(data []byte) (int, error) {
 	return rw.w.Write(data)
 }
 
+func (s *StatsGetPrediction) proxyRequest(r *http.Request) (*http.Response, error) {
+	apiURL, err := url.Parse(s.GGStriveAPIURL)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	apiURL.Path = r.URL.Path
+
+	r.URL = apiURL
+	r.Host = ""
+	r.RequestURI = ""
+	return s.client.Do(r)
+}
+
 func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -87,7 +103,6 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 			next.ServeHTTP(w, r)
 		}
 	})
-
 }
 
 // Proxy getstats
@@ -114,16 +129,12 @@ func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Reque
 				delete(s.statsGetTasks, req)
 				return false
 			}
-			defer resp.Body.Close()
 			// Copy headers
 			for name, values := range resp.Header {
 				w.Header()[name] = values
 			}
 			w.WriteHeader(resp.StatusCode)
-			_, err := io.Copy(w, resp.Body)
-			if err != nil {
-				fmt.Println(err)
-			}
+			w.Write(task.responseBody)
 			delete(s.statsGetTasks, req)
 			if len(s.statsGetTasks) == 0 {
 				s.predictionState = ready
@@ -173,7 +184,24 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 				fmt.Println(err)
 				item.response <- nil
 			} else {
-				item.response <- res
+				buf, err := io.ReadAll(res.Body)
+				res.Body.Close()
+				if err != nil {
+					fmt.Println(err)
+					item.response <- nil
+				} else {
+					//add get_follow and get_block to the generic response cache instead of the prediction queue
+					if strings.HasSuffix(req.URL.Path, "catalog/get_follow") {
+						s.responseCache.AddResponse("catalog/get_follow", res, buf)
+						delete(s.statsGetTasks, item.request)
+					} else if strings.HasSuffix(req.URL.Path, "catalog/get_block") {
+						s.responseCache.AddResponse("catalog/get_block", res, buf)
+						delete(s.statsGetTasks, item.request)
+					} else {
+						item.responseBody = buf
+						item.response <- res
+					}
+				}
 			}
 		default:
 			fmt.Println("Empty queue, shutting down")
@@ -181,7 +209,6 @@ func (s *StatsGetPrediction) ProcessStatsQueue(queue chan *StatsGetTask) {
 
 		}
 	}
-
 }
 
 func (s *StatsGetPrediction) AsyncGetStats(body []byte, reqType StatsGetType) {
@@ -213,7 +240,7 @@ func (s *StatsGetPrediction) AsyncGetStats(body []byte, reqType StatsGetType) {
 
 		id := bodyConst + task.data + "\x00"
 		task.request = id
-		task.response = make(chan *http.Response)
+		task.response = make(chan *http.Response, 1)
 
 		s.statsGetTasks[id] = &task
 		queue <- &task
@@ -226,7 +253,7 @@ func (s *StatsGetPrediction) AsyncGetStats(body []byte, reqType StatsGetType) {
 	}
 }
 
-func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsGetPrediction {
+func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client, responseCache *ResponseCache) StatsGetPrediction {
 	return StatsGetPrediction{
 		GGStriveAPIURL:  GGStriveAPIURL,
 		predictionState: ready,
@@ -234,6 +261,7 @@ func CreateStatsGetPrediction(GGStriveAPIURL string, client *http.Client) StatsG
 		client:          client,
 		PredictReplay:   false,
 		skipNext:        false,
+		responseCache:   responseCache,
 	}
 }
 

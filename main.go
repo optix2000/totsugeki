@@ -287,6 +287,7 @@ func main() {
 	var unsafeNoNews = flag.Bool("unsafe-no-news", false, "UNSAFE: Return an empty response for news.")
 	var unsafePredictReplay = flag.Bool("unsafe-predict-replay", false, "UNSAFE: Asynchronously precache expected get_replay calls. Needs unsafe-predict-stats-get to work.")
 	var unsafeCacheEnv = flag.Bool("unsafe-cache-env", false, "UNSAFE: Cache first get_env call and return cached version on subsequent calls.")
+	var unsafeCacheFollow = flag.Bool("unsafe-cache-follow", false, "UNSAFE: Cache first get_follow and get_block calls and return cached version on subsequent calls.")
 	var ungaBunga = flag.Bool("unga-bunga", UngaBungaMode != "", "UNSAFE: Enable all unsafe speedups for maximum speed. Please read https://github.com/optix2000/totsugeki/blob/master/UNSAFE_SPEEDUPS.md")
 	var iKnowWhatImDoing = flag.Bool("i-know-what-im-doing", false, "UNSAFE: Suppress any UNSAFE warnings. I hope you know what you're doing...")
 	var ver = flag.Bool("version", false, "Print the version number and exit.")
@@ -329,6 +330,7 @@ func main() {
 		*unsafeNoNews = true
 		*unsafePredictReplay = true
 		*unsafeCacheEnv = true
+		*unsafeCacheFollow = true
 	}
 
 	// Drop process priority
@@ -397,6 +399,7 @@ func main() {
 				NoNews:          *unsafeNoNews,
 				PredictReplay:   *unsafePredictReplay,
 				CacheEnv:        *unsafeCacheEnv,
+				CacheFollow:     *unsafeCacheFollow,
 			})
 
 			fmt.Println("Started Proxy Server on port 21611.")
@@ -419,7 +422,7 @@ func main() {
 		}()
 	}
 
-	if !*iKnowWhatImDoing && (*unsafeAsyncStatsSet || *unsafePredictStatsGet || *unsafeCacheNews || *unsafeNoNews || *unsafeCacheEnv || *unsafePredictReplay) {
+	if !*iKnowWhatImDoing && (*unsafeAsyncStatsSet || *unsafePredictStatsGet || *unsafeCacheNews || *unsafeNoNews || *unsafeCacheEnv || *unsafePredictReplay || *unsafeCacheFollow) {
 		fmt.Println("WARNING: Unsafe feature used. Make sure you understand the implications: https://github.com/optix2000/totsugeki/blob/master/UNSAFE_SPEEDUPS.md")
 	}
 

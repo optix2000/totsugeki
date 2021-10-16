@@ -21,12 +21,9 @@ type StriveAPIProxy struct {
 	PatchedAPIURL  string
 	statsQueue     chan<- *http.Request
 	wg             sync.WaitGroup
-	cachedNewsReq  *http.Response
-	cachedNewsBody []byte
 	prediction     StatsGetPrediction
 	CacheEnv       bool
-	cachedEnvReq   *http.Response
-	cachedEnvBody  []byte
+	responseCache  *ResponseCache
 }
 
 type StriveAPIProxyOptions struct {
@@ -36,6 +33,7 @@ type StriveAPIProxyOptions struct {
 	NoNews          bool
 	PredictReplay   bool
 	CacheEnv        bool
+	CacheFollow     bool
 }
 
 func (s *StriveAPIProxy) proxyRequest(r *http.Request) (*http.Response, error) {
@@ -73,13 +71,61 @@ func (s *StriveAPIProxy) HandleCatchall(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// GGST uses the URL from this API after initial launch so we need to intercept this.
-func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
-	if s.CacheEnv && s.cachedEnvReq != nil {
-		for name, values := range s.cachedEnvReq.Header {
+// Invalidate cache if certain requests are used
+func (s *StriveAPIProxy) CacheInvalidationHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch path {
+		case "/api/follow/follow_user", "/api/follow/unfollow_user":
+			s.responseCache.RemoveResponse("catalog/get_follow")
+			next.ServeHTTP(w, r)
+		case "/api/follow/block_user", "/api/follow/unblock_user":
+			s.responseCache.RemoveResponse("catalog/get_block")
+			next.ServeHTTP(w, r)
+		default:
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
+// Generic handler func for cached requests
+func (s *StriveAPIProxy) HandleCachedRequest(request string, w http.ResponseWriter, r *http.Request) {
+	if s.responseCache.ResponseExists(request) {
+		resp, body := s.responseCache.GetResponse(request)
+		for name, values := range resp.Header {
 			w.Header()[name] = values
 		}
-		w.Write(s.cachedEnvBody)
+		w.Write(body)
+	} else {
+		resp, err := s.proxyRequest(r)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+		// Copy headers
+		for name, values := range resp.Header {
+			w.Header()[name] = values
+		}
+		w.WriteHeader(resp.StatusCode)
+		reader := io.TeeReader(resp.Body, w) // For dumping API payloads
+		buf, err := io.ReadAll(reader)
+		if err != nil {
+			fmt.Println(err)
+		}
+		s.responseCache.AddResponse(request, resp, buf)
+	}
+}
+
+// GGST uses the URL from this API after initial launch so we need to intercept this.
+func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
+	if s.CacheEnv && s.responseCache.ResponseExists("sys/get_env") {
+		resp, body := s.responseCache.GetResponse("sys/get_env")
+		for name, values := range resp.Header {
+			w.Header()[name] = values
+		}
+		w.Write(body)
 	} else {
 		resp, err := s.proxyRequest(r)
 		if err != nil {
@@ -104,32 +150,17 @@ func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
 
 // UNSAFE: Cache news on first request. On every other request return the cached value.
 func (s *StriveAPIProxy) HandleGetNews(w http.ResponseWriter, r *http.Request) {
-	if s.cachedNewsReq != nil {
-		for name, values := range s.cachedNewsReq.Header {
-			w.Header()[name] = values
-		}
-		w.Write(s.cachedNewsBody)
-	} else {
-		resp, err := s.proxyRequest(r)
-		if err != nil {
-			fmt.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer resp.Body.Close()
-		// Copy headers
-		for name, values := range resp.Header {
-			w.Header()[name] = values
-		}
-		w.WriteHeader(resp.StatusCode)
-		reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-		buf, err := io.ReadAll(reader)
-		if err != nil {
-			fmt.Println(err)
-		}
-		s.cachedNewsReq = resp
-		s.cachedNewsBody = buf
-	}
+	s.HandleCachedRequest("sys/get_news", w, r)
+}
+
+// UNSAFE: Cache get_follow on first request. On every other request return the cached value.
+func (s *StriveAPIProxy) HandleGetFollow(w http.ResponseWriter, r *http.Request) {
+	s.HandleCachedRequest("catalog/get_follow", w, r)
+}
+
+// UNSAFE: Cache get_block on first request. On every other request return the cached value.
+func (s *StriveAPIProxy) HandleGetBlock(w http.ResponseWriter, r *http.Request) {
+	s.HandleCachedRequest("catalog/get_block", w, r)
 }
 
 func (s *StriveAPIProxy) Shutdown() {
@@ -165,14 +196,20 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 		GGStriveAPIURL: GGStriveAPIURL,
 		PatchedAPIURL:  PatchedAPIURL,
 		CacheEnv:       false,
+		responseCache: &ResponseCache{
+			responses: make(map[string]*CachedResponse),
+		},
 	}
 
 	statsSet := proxy.HandleCatchall
 	statsGet := proxy.HandleCatchall
 	getNews := proxy.HandleCatchall
 	getReplay := proxy.HandleCatchall
+	getFollow := proxy.HandleCatchall
+	getBlock := proxy.HandleCatchall
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(proxy.CacheInvalidationHandler)
 
 	if options.AsyncStatsSet {
 		statsSet = proxy.HandleStatsSet
@@ -187,7 +224,7 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 		predictStatsClient := client
 		predictStatsClient.Transport = &predictStatsTransport
 
-		proxy.prediction = CreateStatsGetPrediction(GGStriveAPIURL, &predictStatsClient)
+		proxy.prediction = CreateStatsGetPrediction(GGStriveAPIURL, &predictStatsClient, proxy.responseCache)
 		r.Use(proxy.prediction.StatsGetStateHandler)
 		statsGet = func(w http.ResponseWriter, r *http.Request) {
 			if !proxy.prediction.HandleGetStats(w, r) {
@@ -207,6 +244,10 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 	} else if options.CacheNews {
 		getNews = proxy.HandleGetNews
 	}
+	if options.CacheFollow {
+		getFollow = proxy.HandleGetFollow
+		getBlock = proxy.HandleGetBlock
+	}
 
 	if options.CacheEnv {
 		proxy.CacheEnv = true
@@ -219,8 +260,7 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 			fmt.Println(err)
 		}
 		buf = bytes.Replace(buf, []byte(GGStriveAPIURL), []byte(PatchedAPIURL), -1)
-		proxy.cachedEnvReq = resp
-		proxy.cachedEnvBody = buf
+		proxy.responseCache.AddResponse("sys/get_env", resp, buf)
 		resp.Body.Close()
 	}
 
@@ -230,8 +270,8 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 		r.HandleFunc("/statistics/set", statsSet)
 		r.HandleFunc("/tus/write", statsSet)
 		r.HandleFunc("/sys/get_news", getNews)
-		r.HandleFunc("/catalog/get_follow", statsGet)
-		r.HandleFunc("/catalog/get_block", statsGet)
+		r.HandleFunc("/catalog/get_follow", getFollow)
+		r.HandleFunc("/catalog/get_block", getBlock)
 		r.HandleFunc("/catalog/get_replay", getReplay)
 		r.HandleFunc("/lobby/get_vip_status", statsGet)
 		r.HandleFunc("/item/get_item", statsGet)

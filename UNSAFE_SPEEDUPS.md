@@ -97,3 +97,15 @@ The first batch of recommended replays will contain random replays when you open
 ### Speedup
 
 2-3 seconds saved on the initial loading on title screen.
+
+## `-unsafe-cache-follow` ([@Borengar](https://github.com/Borengar))
+
+(v1.8.0+)
+
+Totsugeki caches the `/api/catalog/get_follow` and `/api/catalog/get_block` calls on the first request. The same response is returned on subsequent requests.
+
+These requests return your follow/block list. Cache will be invalidated if you follow/unfollow/block/unblock other players. After that the next request will be cached again.
+
+### Speedup
+
+Up to 1 second every time when you look at your follow/block list, enter the tower, open replays, open the ranking list, etc. 
