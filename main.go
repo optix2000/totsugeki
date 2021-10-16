@@ -158,6 +158,10 @@ func watchGGST(noClose bool, ctx context.Context) {
 				cancelableSleep(ctx, 1000*time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
 				var offset uintptr
 				offset, err = patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
+				if errors.Is(err, patcher.ErrOffsetMismatch) {
+					fmt.Printf("WARNING: Offset found at unknown location. This version of Totsugeki has not been tested with this version of GGST and may cause issues.\n")
+					err = nil
+				}
 				if err != nil {
 					if errors.Is(err, patcher.ErrProcessAlreadyPatched) {
 						fmt.Printf("GGST with PID %d is already patched at offset 0x%x.\n", pid, offset)
@@ -168,8 +172,6 @@ func watchGGST(noClose bool, ctx context.Context) {
 					} else if errors.Unwrap(err) == syscall.Errno(windows.ERROR_ACCESS_DENIED) {
 						messageBox("Could not patch GGST. Steam/GGST may be running as Administrator. Try re-running Totsugeki as Administrator.")
 						os.Exit(1)
-					} else if errors.Is(err, patcher.ErrOffsetMismatch) {
-						fmt.Printf("WARNING: Offset found at unknown location. This version of Totsugeki has not been tested with this version of GGST and may cause issues.\n")
 					} else {
 						fmt.Printf("Error with PID %d at offset 0x%x: %v\n", pid, offset, err)
 						continue
