@@ -33,7 +33,7 @@ var UngaBungaMode string = ""
 
 const GGStriveExe = "GGST-Win64-Shipping.exe"
 
-const APIOffsetAddr uintptr = 0x33EE420 // 1.09
+const APIOffsetAddr uintptr = 0x33FC4A0 // 1.10
 
 const GGStriveAPIURL = "https://ggst-game.guiltygear.com/api/"
 const PatchedAPIURL = "http://127.0.0.1:21611/api/"
