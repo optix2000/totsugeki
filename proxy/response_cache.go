@@ -17,7 +17,7 @@ func (c *ResponseCache) ResponseExists(request string) bool {
 }
 
 func (c *ResponseCache) GetResponse(request string) (http.Response, []byte) {
-	response, _ := c.responses[request]
+	response := c.responses[request]
 	return *response.response, response.body
 }
 
