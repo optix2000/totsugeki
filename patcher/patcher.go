@@ -68,14 +68,14 @@ func SearchMemory(proc windows.Handle, LPBaseOfDll uintptr, SizeOfImage uint32, 
 			var ind = bytes.Index(chunk[chunkRollover:bytesRead], value)
 			if ind != -1 {
 				// Override offset with the found API url index
-				offset = p + chunkIndex + uintptr(ind)
-				return offset, nil
+				offset = (p + chunkIndex + uintptr(ind))
+				return offset - LPBaseOfDll, nil
 			}
 			// If the chunk doesn't have the API address, check if its already been patched?
 			ind = bytes.Index(chunk[chunkRollover:bytesRead], altvalue)
 			if ind != -1 {
 				offset = p + chunkIndex + uintptr(ind)
-				return offset, ErrProcessAlreadyPatched
+				return offset - LPBaseOfDll, ErrProcessAlreadyPatched
 			}
 
 			chunkIndex = chunkIndex + bytesRead
@@ -195,10 +195,11 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 	err = VerifyAPIPatch(proc, addr, old, new)
 	if err != nil {
 		// If the offset doesn't have the old or new API address, try searching memory
-		addr, err = SearchMemory(proc, moduleInfo.BaseOfDll, moduleInfo.SizeOfImage, old, new)
+		offsetAddr, err = SearchMemory(proc, moduleInfo.BaseOfDll, moduleInfo.SizeOfImage, old, new)
 		if err != nil {
-			return addr, err
+			return offsetAddr, err
 		}
+		addr = moduleInfo.BaseOfDll + offsetAddr
 	}
 
 	// Set memory writable
