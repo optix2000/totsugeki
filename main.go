@@ -35,6 +35,8 @@ const GGStriveExe = "GGST-Win64-Shipping.exe"
 
 const APIOffsetAddr uintptr = 0x34D23F8 // 1.16
 
+const PatchRetries = 30
+
 const GGStriveAPIURL = "https://ggst-game.guiltygear.com/api/"
 const PatchedAPIURL = "http://127.0.0.1:21611/api/"
 
@@ -154,7 +156,7 @@ func watchGGST(noClose bool, ctx context.Context) {
 				continue
 			}
 			var retry int
-			for retry = 0; retry < 3; retry++ {
+			for retry = 0; retry < PatchRetries; retry++ {
 				cancelableSleep(ctx, 1000*time.Millisecond) // Give GGST some time to finish loading. EnumProcessModules() doesn't like modules changing while it's running.
 				var offset uintptr
 				offset, err = patcher.PatchProc(pid, GGStriveExe, APIOffsetAddr, []byte(GGStriveAPIURL), []byte(PatchedAPIURL))
@@ -184,7 +186,7 @@ func watchGGST(noClose bool, ctx context.Context) {
 					break
 				}
 			}
-			if retry >= 3 {
+			if retry >= PatchRetries {
 				panic(err)
 			}
 			patchedPid = pid
