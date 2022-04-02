@@ -92,24 +92,24 @@ func SearchMemory(proc windows.Handle, LPBaseOfDll uintptr, SizeOfImage uint32, 
 	return 0, ErrAPINotFound
 }
 
-func VerifyAPIOffset(proc windows.Handle, offset uintptr, old []byte, new []byte) (uintptr, error) {
+func VerifyAPIPatch(proc windows.Handle, addr uintptr, old []byte, new []byte) error {
 	var buf = make([]byte, len(old))
 	var bytesRead uintptr
 
 	// Verify we're at the correct offset
-	err := windows.ReadProcessMemory(proc, offset, &buf[0], uintptr(len(old)), &bytesRead)
+	err := windows.ReadProcessMemory(proc, addr, &buf[0], uintptr(len(old)), &bytesRead)
 	if err != nil {
-		return offset, fmt.Errorf("error in ReadProcessMemory: %w", err)
+		return fmt.Errorf("error in ReadProcessMemory: %w", err)
 	}
 
 	if !bytes.Equal(buf[:bytesRead], old) {
 		if bytes.Equal(buf[:min(uint32(bytesRead), uint32(len(new)))], new) {
-			return offset, ErrProcessAlreadyPatched
+			return ErrProcessAlreadyPatched
 		}
-		return offset, fmt.Errorf("%q does not match signature at offset 0x%x", buf[:bytesRead], offset)
+		return fmt.Errorf("%q does not match signature at offset 0x%x", buf[:bytesRead], addr)
 	}
 
-	return offset, nil
+	return nil
 }
 
 func GetProc(proc string) (uint32, error) {
@@ -189,42 +189,42 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 		return 0, fmt.Errorf("error in GetModuleInformationCall: %w", err)
 	}
 
-	var offset = moduleInfo.BaseOfDll + offsetAddr
+	var addr = moduleInfo.BaseOfDll + offsetAddr
 
 	// Check if the API is at the offset specified
-	offset, err = VerifyAPIOffset(proc, offset, old, new)
+	err = VerifyAPIPatch(proc, addr, old, new)
 	if err != nil {
 		// If the offset doesn't have the old or new API address, try searching memory
-		offset, err = SearchMemory(proc, moduleInfo.BaseOfDll, moduleInfo.SizeOfImage, old, new)
+		addr, err = SearchMemory(proc, moduleInfo.BaseOfDll, moduleInfo.SizeOfImage, old, new)
 		if err != nil {
-			return offset, err
+			return addr, err
 		}
 	}
 
 	// Set memory writable
 	var oldProtect uint32
-	err = windows.VirtualProtectEx(proc, offset, uintptr(len(old)), windows.PAGE_READWRITE, &oldProtect)
+	err = windows.VirtualProtectEx(proc, addr, uintptr(len(old)), windows.PAGE_READWRITE, &oldProtect)
 	if err != nil {
-		return offset, fmt.Errorf("error in VirtualProtectEx: %w", err)
+		return addr, fmt.Errorf("error in VirtualProtectEx: %w", err)
 	}
 
 	var bytesWritten uintptr
 	buf := make([]byte, len(old))
 	copy(buf, new)
-	err = windows.WriteProcessMemory(proc, offset, &buf[0], uintptr(len(old)), &bytesWritten)
+	err = windows.WriteProcessMemory(proc, addr, &buf[0], uintptr(len(old)), &bytesWritten)
 	if err != nil {
-		return offset, fmt.Errorf("error in WriteProcessMemory: %w", err)
+		return addr, fmt.Errorf("error in WriteProcessMemory: %w", err)
 	}
 
 	// re-protect memory after patching
-	err = windows.VirtualProtectEx(proc, offset, uintptr(len(old)), oldProtect, &oldProtect)
+	err = windows.VirtualProtectEx(proc, addr, uintptr(len(old)), oldProtect, &oldProtect)
 	if err != nil {
-		return offset, fmt.Errorf("error in VirtualProtectEx: %w", err)
+		return addr, fmt.Errorf("error in VirtualProtectEx: %w", err)
 	}
 
 	err = nil
-	if offsetAddr != (offset - moduleInfo.BaseOfDll) {
+	if offsetAddr != (addr - moduleInfo.BaseOfDll) {
 		err = ErrOffsetMismatch
 	}
-	return offset, err
+	return offsetAddr, err
 }
