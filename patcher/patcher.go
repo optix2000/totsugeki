@@ -12,13 +12,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Other necessary Windows API's
-var modKernel32 *windows.LazyDLL = windows.NewLazySystemDLL("kernel32.dll")
-var procReadProcessMemory *windows.LazyProc = modKernel32.NewProc("ReadProcessMemory")
-var procWriteProcessMemory *windows.LazyProc = modKernel32.NewProc("WriteProcessMemory")
-var procVirtualProtectEx *windows.LazyProc = modKernel32.NewProc("VirtualProtectEx")
-var procVirtualQueryEx *windows.LazyProc = modKernel32.NewProc("VirtualQueryEx")
-
 // Errors
 var ErrProcessAlreadyPatched = errors.New("process already patched")
 var ErrProcessNotFound = errors.New("couldn't find process")
@@ -41,18 +34,7 @@ func max(a uint32, b uint32) uint32 {
 
 func SearchMemory(proc windows.Handle, LPBaseOfDll uintptr, SizeOfImage uint32, value []byte, altvalue []byte) (uintptr, error) {
 	// Information about the contents of the memory to read
-	var memoryBasicInfo struct {
-		BaseAddress       uintptr
-		AllocationBase    uintptr
-		AllocationProtect uint32
-		PartitionId       uint16
-		RegionSize        uintptr
-		State             uint32
-		Protect           uint32
-		Type              uint32
-	}
-
-	var memoryBasicInfoSize = uint32(unsafe.Sizeof(memoryBasicInfo))
+	var memoryBasicInfo windows.MemoryBasicInformation
 
 	var p uintptr = LPBaseOfDll
 	var offset uintptr
@@ -61,8 +43,8 @@ func SearchMemory(proc windows.Handle, LPBaseOfDll uintptr, SizeOfImage uint32, 
 	// Programmatically find the offset of the API url
 	// Don't search beyond the end of the application memory
 	for p < LPBaseOfDll+uintptr(SizeOfImage) {
-		ret, _, err := procVirtualQueryEx.Call(uintptr(proc), p, uintptr(unsafe.Pointer(&memoryBasicInfo)), uintptr(memoryBasicInfoSize))
-		if ret != unsafe.Sizeof(memoryBasicInfo) {
+		err := windows.VirtualQueryEx(proc, p, &memoryBasicInfo, unsafe.Sizeof(memoryBasicInfo))
+		if err != nil {
 			return 0, fmt.Errorf("error in VirtualQueryEx: %w", err)
 		}
 
@@ -76,26 +58,24 @@ func SearchMemory(proc windows.Handle, LPBaseOfDll uintptr, SizeOfImage uint32, 
 
 		for chunkIndex < memoryBasicInfo.RegionSize {
 			// Read the chunk of memory into a byte array, It doesn't matter if we ask for more data than the size of the region
-			ret, _, err = procReadProcessMemory.Call(uintptr(proc), memoryBasicInfo.BaseAddress+chunkIndex, uintptr(unsafe.Pointer(&chunk[chunkRollover])), MAX_CHUNK_SIZE-chunkRollover, uintptr(unsafe.Pointer(&bytesRead)))
-			if ret == 0 {
+			err = windows.ReadProcessMemory(proc, memoryBasicInfo.BaseAddress+chunkIndex, &chunk[chunkRollover], MAX_CHUNK_SIZE-chunkRollover, &bytesRead)
+			if err != nil {
 				return 0, fmt.Errorf("error in ReadProcessMemory: %w", err)
 			}
 
-			if ret != 0 {
-				// See if the chunk contains the API url and get its offset if its there
-				// Only gets the first instance of the API url in memory
-				var ind = bytes.Index(chunk[chunkRollover:bytesRead], value)
-				if ind != -1 {
-					// Override offset with the found API url index
-					offset = p + chunkIndex + uintptr(ind)
-					return offset, nil
-				}
-				// If the chunk doesn't have the API address, check if its already been patched?
-				ind = bytes.Index(chunk[chunkRollover:bytesRead], altvalue)
-				if ind != -1 {
-					offset = p + chunkIndex + uintptr(ind)
-					return offset, ErrProcessAlreadyPatched
-				}
+			// See if the chunk contains the API url and get its offset if its there
+			// Only gets the first instance of the API url in memory
+			var ind = bytes.Index(chunk[chunkRollover:bytesRead], value)
+			if ind != -1 {
+				// Override offset with the found API url index
+				offset = p + chunkIndex + uintptr(ind)
+				return offset, nil
+			}
+			// If the chunk doesn't have the API address, check if its already been patched?
+			ind = bytes.Index(chunk[chunkRollover:bytesRead], altvalue)
+			if ind != -1 {
+				offset = p + chunkIndex + uintptr(ind)
+				return offset, ErrProcessAlreadyPatched
 			}
 
 			chunkIndex = chunkIndex + bytesRead
@@ -114,16 +94,16 @@ func SearchMemory(proc windows.Handle, LPBaseOfDll uintptr, SizeOfImage uint32, 
 
 func VerifyAPIOffset(proc windows.Handle, offset uintptr, old []byte, new []byte) (uintptr, error) {
 	var buf = make([]byte, len(old))
-	var bytesRead uint32
+	var bytesRead uintptr
 
 	// Verify we're at the correct offset
-	ret, _, err := procReadProcessMemory.Call(uintptr(proc), offset, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(old)), uintptr(unsafe.Pointer(&bytesRead)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
+	err := windows.ReadProcessMemory(proc, offset, &buf[0], uintptr(len(old)), &bytesRead)
+	if err != nil {
 		return offset, fmt.Errorf("error in ReadProcessMemory: %w", err)
 	}
 
 	if !bytes.Equal(buf[:bytesRead], old) {
-		if bytes.Equal(buf[:min(bytesRead, uint32(len(new)))], new) {
+		if bytes.Equal(buf[:min(uint32(bytesRead), uint32(len(new)))], new) {
 			return offset, ErrProcessAlreadyPatched
 		}
 		return offset, fmt.Errorf("%q does not match signature at offset 0x%x", buf[:bytesRead], offset)
@@ -223,22 +203,22 @@ func PatchProc(pid uint32, moduleName string, offsetAddr uintptr, old []byte, ne
 
 	// Set memory writable
 	var oldProtect uint32
-	ret, _, err := procVirtualProtectEx.Call(uintptr(proc), offset, uintptr(len(old)), windows.PAGE_READWRITE, uintptr(unsafe.Pointer(&oldProtect)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
+	err = windows.VirtualProtectEx(proc, offset, uintptr(len(old)), windows.PAGE_READWRITE, &oldProtect)
+	if err != nil {
 		return offset, fmt.Errorf("error in VirtualProtectEx: %w", err)
 	}
 
-	var bytesWritten uint32
+	var bytesWritten uintptr
 	buf := make([]byte, len(old))
 	copy(buf, new)
-	ret, _, err = procWriteProcessMemory.Call(uintptr(proc), offset, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(old)), uintptr(unsafe.Pointer(&bytesWritten)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
+	err = windows.WriteProcessMemory(proc, offset, &buf[0], uintptr(len(old)), &bytesWritten)
+	if err != nil {
 		return offset, fmt.Errorf("error in WriteProcessMemory: %w", err)
 	}
 
 	// re-protect memory after patching
-	ret, _, err = procVirtualProtectEx.Call(uintptr(proc), offset, uintptr(len(old)), uintptr(oldProtect), uintptr(unsafe.Pointer(&oldProtect)))
-	if ret == 0 { // err is always set, even on success. Need to look at return value
+	err = windows.VirtualProtectEx(proc, offset, uintptr(len(old)), oldProtect, &oldProtect)
+	if err != nil {
 		return offset, fmt.Errorf("error in VirtualProtectEx: %w", err)
 	}
 
