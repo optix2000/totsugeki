@@ -137,7 +137,7 @@ func watchGGST(noClose bool, ctx context.Context) {
 			if err != nil {
 				if errors.Is(err, patcher.ErrProcessNotFound) {
 					if close {
-						sig <- os.Interrupt
+						sig <- os.Interrupt // Gracefully shutdown
 						return
 					}
 
@@ -153,6 +153,8 @@ func watchGGST(noClose bool, ctx context.Context) {
 			}
 			if pid == patchedPid {
 				cancelableSleep(ctx, 5*time.Second)
+				continue
+			} else if patchedPid > 1 { // Catch case where GGST restarts in between detection loop.
 				continue
 			}
 			var retry int
