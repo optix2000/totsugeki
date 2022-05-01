@@ -35,7 +35,7 @@ const GGStriveExe = "GGST-Win64-Shipping.exe"
 
 const APIOffsetAddr uintptr = 0x34D23F8 // 1.16
 
-const PatchRetries = 30
+const PatchRetries = 3
 
 const GGStriveAPIURL = "https://ggst-game.guiltygear.com/api/"
 const PatchedAPIURL = "http://127.0.0.1:21611/api/"
@@ -189,7 +189,7 @@ func watchGGST(noClose bool, ctx context.Context) {
 				}
 			}
 			if retry >= PatchRetries {
-				panic(err)
+				break
 			}
 			patchedPid = pid
 		}
