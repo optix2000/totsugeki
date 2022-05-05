@@ -64,8 +64,7 @@ func (s *StriveAPIProxy) HandleCatchall(w http.ResponseWriter, r *http.Request) 
 		w.Header()[name] = values
 	}
 	w.WriteHeader(resp.StatusCode)
-	reader := io.TeeReader(resp.Body, w) // For dumping API payloads
-	_, err = io.ReadAll(reader)
+	_, err = io.Copy(w, resp.Body)
 	if err != nil {
 		fmt.Println(err)
 	}
