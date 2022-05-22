@@ -34,6 +34,7 @@ type StriveAPIProxyOptions struct {
 	PredictReplay   bool
 	CacheEnv        bool
 	CacheFollow     bool
+	RatingUpdate    bool
 }
 
 func (s *StriveAPIProxy) proxyRequest(r *http.Request) (*http.Response, error) {
@@ -209,6 +210,11 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(proxy.CacheInvalidationHandler)
+
+	if options.RatingUpdate {
+		ru := NewRatingUpdate()
+		r.Use(ru.RatingUpdateHandler)
+	}
 
 	if options.AsyncStatsSet {
 		statsSet = proxy.HandleStatsSet

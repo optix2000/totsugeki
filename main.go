@@ -294,6 +294,7 @@ func main() {
 	var unsafeCacheFollow = flag.Bool("unsafe-cache-follow", false, "UNSAFE: Cache first get_follow and get_block calls and return cached version on subsequent calls.")
 	var ungaBunga = flag.Bool("unga-bunga", UngaBungaMode != "", "UNSAFE: Enable all unsafe speedups for maximum speed. Please read https://github.com/optix2000/totsugeki/blob/master/UNSAFE_SPEEDUPS.md")
 	var iKnowWhatImDoing = flag.Bool("i-know-what-im-doing", false, "UNSAFE: Suppress any UNSAFE warnings. I hope you know what you're doing...")
+	var ratingUpdate = flag.Bool("rating-update", false, "Display ratings from ratingupdate.info instead of character levels.")
 	var ver = flag.Bool("version", false, "Print the version number and exit.")
 
 	flag.Parse()
@@ -404,6 +405,7 @@ func main() {
 				PredictReplay:   *unsafePredictReplay,
 				CacheEnv:        *unsafeCacheEnv,
 				CacheFollow:     *unsafeCacheFollow,
+				RatingUpdate:    *ratingUpdate,
 			})
 
 			fmt.Println("Started Proxy Server on port 21611.")
