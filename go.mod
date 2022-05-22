@@ -11,11 +11,14 @@ require (
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
 )
 
+require github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
+
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/tc-hib/winres v0.1.6 // indirect
 	github.com/urfave/cli/v2 v2.4.0 // indirect
+	github.com/vmihailenco/msgpack/v5 v5.3.5
 	golang.org/x/image v0.0.0-20220321031419-a8550c1d254a // indirect
 )
