@@ -56,7 +56,7 @@ func (J *RawJSON) DecodeMsgpack(dec *msgpack.Decoder) error {
 	}
 	jDecoder := json.NewDecoder(bytes.NewBufferString(s))
 	jDecoder.UseNumber() // Things like AccountID are very long numbers
-	jDecoder.Decode(J)
+	err = jDecoder.Decode(J)
 	if err != nil {
 		return err
 	}
