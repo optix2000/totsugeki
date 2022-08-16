@@ -61,6 +61,7 @@ var characters = map[string]int{
 	"COS": 17,
 	"BKN": 18,
 	"TST": 19,
+	"BGT": 20,
 }
 
 type RatingUpdate struct {
