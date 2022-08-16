@@ -1,5 +1,7 @@
 # totsugeki 🐬 <a href="https://github.com/optix2000/totsugeki/actions"><img src="https://img.shields.io/github/workflow/status/optix2000/totsugeki/Builds/master" alt="Builds"></a> <a href="https://github.com/optix2000/totsugeki/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/optix2000/totsugeki"></a> <a href="https://github.com/optix2000/totsugeki/releases"><img src="https://img.shields.io/github/downloads/optix2000/totsugeki/total"></a> <a href="https://twitter.com/ggst_totsugeki"><img alt="Twitter Follow" src="https://img.shields.io/twitter/follow/ggst_totsugeki?style=social"></a>
 
+### As of the Bridget patch (v1.21), Totsugeki is no longer necessary. GGST now properly does keepalives after over a year of waiting 😭. Unga-bunga still provides a speedup. Rating-Update should continue to work.
+
 Guilty Gear Strive Proxy for faster loading screens.
 
 Totsugeki lets you totsugeki past the Strive connection screen.
