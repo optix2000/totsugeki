@@ -15,15 +15,18 @@ jobs:
     if: ${{ github.event_name != 'release'}}
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: golangci/golangci-lint-action@v2
+    - uses: actions/checkout@v3
+    - uses: actions/setup-go@v3
+      with:
+        go-version: 1.19
+    - uses: golangci/golangci-lint-action@v3
   build:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: actions/setup-go@v2
+    - uses: actions/setup-go@v3
       with:
         go-version: 1.19
     # Silly hack to pass GOCACHE between steps
@@ -32,7 +35,7 @@ jobs:
         echo "GOCACHE=$(go env GOCACHE)" >> $GITHUB_ENV
         echo "GOMODCACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
         echo "PATH=${PATH}:$(go env GOPATH)/bin" >> $GITHUB_ENV
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         path: |
           ${{ env.GOCACHE }}
@@ -47,7 +50,7 @@ jobs:
     - run: go build -v -trimpath -ldflags="-X main.Version=$(git describe --always --tags --dirty --broken)"
     - run: go build -v -trimpath -ldflags="-X main.Version=$(git describe --always --tags --dirty --broken)-unga-bunga -X main.UngaBungaMode=true" -o totsugeki-unga-bunga.exe
       if: ${{ github.event_name == 'release'}}
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: totsugeki
         path: totsugeki*.exe
@@ -64,7 +67,7 @@ jobs:
     permissions:
       contents: write
     steps:
-    - uses: actions/download-artifact@v2
+    - uses: actions/download-artifact@v3
       with:
         name: totsugeki
     - uses: softprops/action-gh-release@v0.1.7
