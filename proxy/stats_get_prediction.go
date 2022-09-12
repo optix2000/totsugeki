@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -108,9 +107,9 @@ func (s *StatsGetPrediction) StatsGetStateHandler(next http.Handler) http.Handle
 // Proxy getstats
 func (s *StatsGetPrediction) HandleGetStats(w http.ResponseWriter, r *http.Request) bool {
 	if s.predictionState == sending_calls {
-		bodyBytes, _ := ioutil.ReadAll(r.Body)
-		r.Body.Close()                                        //  must close
-		r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes)) // Reset Body as the request gets reused by catchall if this has an error.
+		bodyBytes, _ := io.ReadAll(r.Body)
+		r.Body.Close()                                    //  must close
+		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Reset Body as the request gets reused by catchall if this has an error.
 		req := string(bodyBytes)
 		if strings.HasSuffix(r.RequestURI, "catalog/get_replay") {
 			regex := regexp.MustCompile(`940100059aff00.*$`)

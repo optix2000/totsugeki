@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -20,7 +19,7 @@ func (s *StriveAPIProxy) HandleStatsSet(w http.ResponseWriter, r *http.Request) 
 	// https://github.com/golang/go/issues/36095
 	var b bytes.Buffer
 	b.ReadFrom(r.Body)
-	req.Body = ioutil.NopCloser(bytes.NewReader(b.Bytes()))
+	req.Body = io.NopCloser(bytes.NewReader(b.Bytes()))
 
 	s.statsQueue <- req
 
