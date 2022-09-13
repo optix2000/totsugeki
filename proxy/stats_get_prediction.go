@@ -288,6 +288,7 @@ func ExpectedTitleScreenCalls() []StatsGetTask {
 		{data: "96a008ff11ffff", path: "statistics/get"},
 		{data: "96a008ff12ffff", path: "statistics/get"},
 		{data: "96a008ff13ffff", path: "statistics/get"},
+		{data: "96a008ff14ffff", path: "statistics/get"},
 		{data: "96a008ffffffff", path: "statistics/get"},
 
 		{data: "93000101", path: "catalog/get_follow"},
@@ -323,6 +324,7 @@ func ExpectedRCodeCalls() []StatsGetTask {
 		{data: "06ff11ffff", path: "statistics/get"},
 		{data: "06ff12ffff", path: "statistics/get"},
 		{data: "06ff13ffff", path: "statistics/get"},
+		{data: "06ff14ffff", path: "statistics/get"},
 		{data: "06ffffffff", path: "statistics/get"},
 		{data: "05ffffffff", path: "statistics/get"},
 		{data: "020100ffff", path: "statistics/get"},
@@ -345,6 +347,7 @@ func ExpectedRCodeCalls() []StatsGetTask {
 		{data: "020111ffff", path: "statistics/get"},
 		{data: "020112ffff", path: "statistics/get"},
 		{data: "020113ffff", path: "statistics/get"},
+		{data: "020114ffff", path: "statistics/get"},
 		{data: "0201ffffff", path: "statistics/get"},
 		{data: "010100feff", path: "statistics/get"},
 		{data: "010100ffff", path: "statistics/get"},
@@ -386,6 +389,8 @@ func ExpectedRCodeCalls() []StatsGetTask {
 		{data: "010112ffff", path: "statistics/get"},
 		{data: "010113feff", path: "statistics/get"},
 		{data: "010113ffff", path: "statistics/get"},
+		{data: "010114feff", path: "statistics/get"},
+		{data: "010114ffff", path: "statistics/get"},
 		{data: "0101fffeff", path: "statistics/get"},
 		{data: "0101ffffff", path: "statistics/get"},
 	}
