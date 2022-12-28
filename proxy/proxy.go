@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/optix2000/totsugeki/crypto"
 )
 
 type StriveAPIProxy struct {
@@ -139,12 +140,28 @@ func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
 			w.Header()[name] = values
 		}
 		w.WriteHeader(resp.StatusCode)
-		buf, err := io.ReadAll(resp.Body)
+		encryptedBody, err := io.ReadAll(resp.Body)
 		if err != nil {
 			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
-		buf = bytes.Replace(buf, []byte(s.GGStriveAPIURL), []byte(s.PatchedAPIURL), -1)
-		w.Write(buf)
+
+		decryptedBody, err := crypto.Decrypt(encryptedBody)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		decryptedBody = bytes.Replace(decryptedBody, []byte(s.GGStriveAPIURL), []byte(s.PatchedAPIURL), -1)
+		encryptedRequest, err := crypto.Encrypt(decryptedBody)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Write(encryptedRequest)
 	}
 }
 
