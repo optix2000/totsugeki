@@ -49,7 +49,28 @@ func (s *StriveAPIProxy) proxyRequest(r *http.Request) (*http.Response, error) {
 	r.URL = apiURL
 	r.Host = ""
 	r.RequestURI = ""
-	return s.Client.Do(r)
+
+	res, err := s.Client.Do(r)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	encryptedBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	decryptedBody, err := crypto.Decrypt(encryptedBody)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	fmt.Printf("%s", decryptedBody)
+
+	res.Body = io.NopCloser(bytes.NewReader(decryptedBody))
+	return res, nil
 }
 
 // Proxy everything else
@@ -143,9 +164,15 @@ func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
 		buf, err := io.ReadAll(resp.Body)
 		if err != nil {
 			fmt.Println(err)
+			return
 		}
 		buf = bytes.Replace(buf, []byte(s.GGStriveAPIURL), []byte(s.PatchedAPIURL), -1)
-		w.Write(buf)
+		encryptedBuf, err := crypto.Encrypt(buf)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		w.Write(encryptedBuf)
 	}
 }
 
@@ -210,7 +237,7 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 	getBlock := proxy.HandleCatchall
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Use(crypto.Middleware)
+	// r.Use(crypto.Middleware)
 	r.Use(proxy.CacheInvalidationHandler)
 
 	if options.RatingUpdate {

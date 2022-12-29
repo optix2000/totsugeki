@@ -1,14 +1,13 @@
 package crypto
 
 import (
-	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -16,6 +15,9 @@ import (
 // See https://github.com/optix2000/totsugeki/issues/86
 
 const ivLen = 12
+
+// ContextDecryptedBodyKey used to access the decrypted body inside a request Context
+const ContextDecryptedBodyKey = "DecryptedBodyKey"
 
 var aesgcm cipher.AEAD
 
@@ -69,10 +71,10 @@ func Encrypt(payload []byte) ([]byte, error) {
 	return out, nil
 }
 
-// Middleware decrypts incoming requests, and decrypts the outgoing request
+// Middleware decrypts incoming requests, and adds the decrypted body into the context
 func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		encryptedBody, err := ioutil.ReadAll(r.Body)
+		encryptedBody, err := io.ReadAll(r.Body)
 		if err != nil {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -86,41 +88,8 @@ func Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// put the decrypted body back in the request body
-		r.Body = ioutil.NopCloser(bytes.NewReader(decryptedBody))
-
-		// catch the original writer and write the response as usual
-		unencryptedWriter := encryptResponseWriter{
-			ResponseWriter: w,
-			buf:            &bytes.Buffer{},
-		}
-		next.ServeHTTP(unencryptedWriter, r)
-
-		unencryptedBytes, err := ioutil.ReadAll(unencryptedWriter.buf)
-		if err != nil {
-			fmt.Println("read unencrypted response failure", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		encryptedResponse, err := Encrypt(unencryptedBytes)
-		if err != nil {
-			fmt.Println("Encrypt failure", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		_, err = io.Copy(w, bytes.NewReader(encryptedResponse))
-		if err != nil {
-			fmt.Println("rewriting response failure", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
+		// add the decrypted body into the request context
+		ctx := context.WithValue(r.Context(), ContextDecryptedBodyKey, decryptedBody)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-type encryptResponseWriter struct {
-	http.ResponseWriter
-	buf *bytes.Buffer
 }
