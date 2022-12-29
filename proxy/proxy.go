@@ -140,28 +140,12 @@ func (s *StriveAPIProxy) HandleGetEnv(w http.ResponseWriter, r *http.Request) {
 			w.Header()[name] = values
 		}
 		w.WriteHeader(resp.StatusCode)
-		encryptedBody, err := io.ReadAll(resp.Body)
+		buf, err := io.ReadAll(resp.Body)
 		if err != nil {
 			fmt.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
 		}
-
-		decryptedBody, err := crypto.Decrypt(encryptedBody)
-		if err != nil {
-			fmt.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		decryptedBody = bytes.Replace(decryptedBody, []byte(s.GGStriveAPIURL), []byte(s.PatchedAPIURL), -1)
-		encryptedRequest, err := crypto.Encrypt(decryptedBody)
-		if err != nil {
-			fmt.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Write(encryptedRequest)
+		buf = bytes.Replace(buf, []byte(s.GGStriveAPIURL), []byte(s.PatchedAPIURL), -1)
+		w.Write(buf)
 	}
 }
 
@@ -226,6 +210,7 @@ func CreateStriveProxy(listen string, GGStriveAPIURL string, PatchedAPIURL strin
 	getBlock := proxy.HandleCatchall
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(crypto.Middleware)
 	r.Use(proxy.CacheInvalidationHandler)
 
 	if options.RatingUpdate {

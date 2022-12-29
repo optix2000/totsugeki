@@ -1,11 +1,15 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
 )
 
 // As of the December 2022 patch, requests/responses from the API are GCM encrypted
@@ -63,4 +67,60 @@ func Encrypt(payload []byte) ([]byte, error) {
 
 	out := append(iv, encrypted...)
 	return out, nil
+}
+
+// Middleware decrypts incoming requests, and decrypts the outgoing request
+func Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		encryptedBody, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		decryptedBody, err := Decrypt(encryptedBody)
+		if err != nil {
+			fmt.Println("Decrypt failure", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// put the decrypted body back in the request body
+		r.Body = ioutil.NopCloser(bytes.NewReader(decryptedBody))
+
+		// catch the original writer and write the response as usual
+		unencryptedWriter := encryptResponseWriter{
+			ResponseWriter: w,
+			buf:            &bytes.Buffer{},
+		}
+		next.ServeHTTP(unencryptedWriter, r)
+
+		unencryptedBytes, err := ioutil.ReadAll(unencryptedWriter.buf)
+		if err != nil {
+			fmt.Println("read unencrypted response failure", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		encryptedResponse, err := Encrypt(unencryptedBytes)
+		if err != nil {
+			fmt.Println("Encrypt failure", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		_, err = io.Copy(w, bytes.NewReader(encryptedResponse))
+		if err != nil {
+			fmt.Println("rewriting response failure", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+	})
+}
+
+type encryptResponseWriter struct {
+	http.ResponseWriter
+	buf *bytes.Buffer
 }
