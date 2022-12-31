@@ -67,7 +67,6 @@ func (s *StriveAPIProxy) proxyRequest(r *http.Request) (*http.Response, error) {
 		fmt.Println(err)
 		return nil, err
 	}
-	fmt.Printf("%s", decryptedBody)
 
 	res.Body = io.NopCloser(bytes.NewReader(decryptedBody))
 	return res, nil

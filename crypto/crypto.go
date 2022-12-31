@@ -46,20 +46,21 @@ func init() {
 // Decrypt decrypts the GGST's api's responses
 func Decrypt(encrypted []byte) ([]byte, error) {
 	if len(encrypted) <= ivLen {
-		return nil, fmt.Errorf("encrypted []byte must longer than %d", ivLen)
+		return nil, fmt.Errorf("Decrypt encrypted []byte must longer than %d", ivLen)
 	}
 
-	iv := encrypted[:12]
-	plainText, err := aesgcm.Open(nil, iv, encrypted[12:], nil)
+	iv := encrypted[:ivLen]
+	plainText, err := aesgcm.Open(nil, iv, encrypted[ivLen:], nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Decrypt Open failure: %s", err)
 	}
+	fmt.Printf("Decrypt: %s\n", plainText)
 	return plainText, nil
 }
 
 // Encrypt encrypts request bodies, to be sent to the GGST API.
 func Encrypt(payload []byte) ([]byte, error) {
-	iv := make([]byte, 12)
+	iv := make([]byte, ivLen)
 	_, err := rand.Read(iv)
 	if err != nil {
 		return nil, err
